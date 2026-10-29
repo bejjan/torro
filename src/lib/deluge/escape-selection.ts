@@ -78,9 +78,9 @@ export function torrentSearchPlaceholder(isMac: boolean): string {
   return torrentSearchShortcutTitle(isMac);
 }
 
-/** Mac / iOS use ⌘A; Windows and Linux use Ctrl+A. */
+/** Mac / iOS use ⌘D; Windows and Linux use Ctrl+D. ⌘A stays Select All. */
 export function addTorrentShortcutLabel(isMac: boolean): string {
-  return isMac ? "⌘A" : "Ctrl+A";
+  return isMac ? "⌘D" : "Ctrl+D";
 }
 
 export function addTorrentShortcutTitle(isMac: boolean): string {
@@ -113,12 +113,13 @@ export function decideTorrentSearchFindAction(input: TorrentSearchFindInput): To
 }
 
 /**
- * Cmd+A (Mac) / Ctrl+A (elsewhere) opens Add torrent.
- * Search and other text fields keep native Select All.
+ * Cmd+D (Mac) / Ctrl+D (elsewhere) opens Add torrent.
+ * Cmd+A / Ctrl+A stays Select All in the torrent list.
+ * Search and other text fields keep their own shortcuts.
  * Open dialogs/menus keep the shortcut; preventDefault when handled.
  */
 export function decideAddTorrentShortcutAction(input: ModifierShortcutInput): AddTorrentShortcutAction {
-  return matchesLetterShortcut(input, "a", { skipSearch: true }) ? "open-add" : "none";
+  return matchesLetterShortcut(input, "d", { skipSearch: true }) ? "open-add" : "none";
 }
 
 export function hasOpenDismissibleOverlay(root: ParentNode): boolean {
