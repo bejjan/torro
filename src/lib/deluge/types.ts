@@ -94,6 +94,12 @@ export interface UiUpdate {
   torrents: Record<string, TorrentStatus> | null;
   filters: Record<string, FilterTuple[]> | null;
   stats: SessionStats | null;
+  /** Present when this frame only contains torrent fields that changed. */
+  partial?: boolean;
+  /** Torrent ids removed since the previous full or partial frame. */
+  removed?: string[];
+  /** Server snapshot id. Send it back to receive another partial frame. */
+  revision?: number;
 }
 
 export interface JsonRpcResponse<T = unknown> {

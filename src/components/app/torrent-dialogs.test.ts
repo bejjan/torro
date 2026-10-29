@@ -85,6 +85,10 @@ assert.match(addDialog, /sourceMenuOpen/);
 assert.match(addDialog, /onSourceMenuOpenChange/);
 assert.match(addDialog, /function revealPanel/);
 assert.match(addDialog, /if \(!open\) onOpenChange\(true\)/);
+assert.match(addDialog, /function pickDefaultAdd/);
+assert.match(addDialog, /onClick=\{pickDefaultAdd\}/);
+assert.match(addDialog, /pickDefaultAddRef\.current = pickDefaultAdd/);
+assert.match(addDialog, /aria-label="More ways to add a torrent"/);
 assert.match(addDialog, /<DropdownMenu open=\{sourceMenuOpen\}/);
 assert.match(addDialog, /<DropdownMenuTrigger/);
 assert.ok(

@@ -287,4 +287,36 @@ assert.equal(torrentStatusEqual(a, { ...a, progress: 11 }), false);
   assert.equal(fromDecoded?.name, decodedName);
 }
 
+{
+  const prev = mergeUiUpdate(null, {
+    connected: true,
+    torrents: { a, b },
+    filters: { state: [["All", 2]] },
+    stats: null,
+  });
+  const patched = mergeUiUpdate(prev, {
+    connected: true,
+    partial: true,
+    removed: [],
+    revision: 2,
+    torrents: { b: { upload_payload_rate: 40 } as TorrentStatus },
+    filters: { state: [["All", 2]] },
+    stats: null,
+  });
+  assert.equal(patched.torrents?.a, prev.torrents?.a, "untouched torrents stay put");
+  assert.equal(patched.torrents?.b.name, "b.iso");
+  assert.equal(patched.torrents?.b.upload_payload_rate, 40);
+  assert.equal(patched.partial, undefined);
+  const removed = mergeUiUpdate(patched, {
+    connected: true,
+    partial: true,
+    removed: ["a"],
+    torrents: {},
+    filters: { state: [["All", 1]] },
+    stats: null,
+  });
+  assert.equal(removed.torrents?.a, undefined);
+  assert.equal(removed.torrents?.b.name, "b.iso");
+}
+
 console.log("ui-merge tests passed");

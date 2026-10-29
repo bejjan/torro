@@ -3,6 +3,8 @@ import { parseAdminDemoHeader } from "@/lib/demo/admin-catalog";
 import { clientKindFromRequest } from "@/lib/backend/request";
 import { handleDemoRpc, type JsonRpcRequest } from "@/lib/deluge/demo";
 import { jsonRpcError, proxyDeluge, resolveDelugeTarget } from "@/lib/deluge/proxy";
+import { patchUiFrame, uiSnapshotKey } from "@/lib/deluge/ui-diff";
+import type { UiUpdate } from "@/lib/deluge/types";
 import { handleQbittorrentCompat } from "@/lib/qbittorrent/compat";
 import {
   QbittorrentProxyError,
@@ -45,15 +47,19 @@ export async function POST(req: NextRequest) {
     const demo = handleDemoRpc(body, req.headers.get("cookie"), admin);
     const res = NextResponse.json({ id: demo.id, result: demo.result, error: demo.error });
     if (demo.setCookie) res.headers.append("Set-Cookie", demo.setCookie);
-    return res;
+    return withUiDiff(req, body, res);
   }
 
-  return proxyDeluge(req, resolved.target, "/json", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-    rpcId: body.id ?? null,
-  });
+  return withUiDiff(
+    req,
+    body,
+    await proxyDeluge(req, resolved.target, "/json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      rpcId: body.id ?? null,
+    })
+  );
 }
 
 async function handleTransmissionJson(req: NextRequest, body: JsonRpcRequest) {
@@ -81,7 +87,7 @@ async function handleTransmissionJson(req: NextRequest, body: JsonRpcRequest) {
       const auth = authSetCookie(req);
       if (auth) cookies.push(auth);
     }
-    return withTransmissionCookies(res, undefined, cookies);
+    return withUiDiff(req, body, withTransmissionCookies(res, undefined, cookies));
   } catch (err) {
     if (err instanceof TransmissionProxyError) {
       return jsonRpcError(body.id ?? null, err.message, err.status);
@@ -110,11 +116,49 @@ async function handleQbittorrentJson(req: NextRequest, body: JsonRpcRequest) {
     });
     const res = NextResponse.json({ id: demo.id, result: demo.result, error: demo.error });
     const cookies = demo.setCookie == null ? [] : Array.isArray(demo.setCookie) ? demo.setCookie : [demo.setCookie];
-    return withQbittorrentCookies(res, cookies);
+    return withUiDiff(req, body, withQbittorrentCookies(res, cookies));
   } catch (err) {
     if (err instanceof QbittorrentProxyError) {
       return jsonRpcError(body.id ?? null, err.message, err.status);
     }
     return jsonRpcError(body.id ?? null, err instanceof Error ? err.message : "qBittorrent request failed");
   }
+}
+
+function requestedUiRevision(req: NextRequest): number | null {
+  const raw = req.headers.get("x-torro-ui-rev");
+  if (raw == null || !raw.trim()) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** Shrink `web.update_ui` to changed torrent fields when the browser holds the previous frame. */
+async function withUiDiff(req: NextRequest, body: JsonRpcRequest, res: NextResponse) {
+  if (body.method !== "web.update_ui" || !res.ok) return res;
+  let payload: { id?: unknown; result?: UiUpdate | null; error?: unknown };
+  try {
+    payload = (await res.clone().json()) as { id?: unknown; result?: UiUpdate | null; error?: unknown };
+  } catch {
+    return res;
+  }
+  const result = payload?.result;
+  if (!payload || payload.error || !result || typeof result !== "object" || !("torrents" in result)) {
+    return res;
+  }
+  const key = uiSnapshotKey([
+    clientKindFromRequest(req),
+    req.headers.get("cookie") ?? "",
+    req.headers.get("x-deluge-url") ?? "",
+    req.headers.get("x-qbittorrent-url") ?? "",
+    req.headers.get("x-transmission-url") ?? "",
+    req.headers.get("x-nova-admin-demo") ?? "",
+  ]);
+  const patched = patchUiFrame(key, requestedUiRevision(req), {
+    ...result,
+    connected: Boolean(result.connected),
+    torrents: (result.torrents ?? null) as Record<string, Record<string, unknown>> | null,
+  });
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  return NextResponse.json({ ...payload, result: patched }, { status: res.status, headers });
 }

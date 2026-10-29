@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  SESSION_FAVICON_LOGO_SRC,
+  SESSION_FAVICON_BG,
   SESSION_FAVICON_MARK,
   SESSION_FAVICON_MIN_INTERVAL_MS,
   SESSION_FAVICON_RING_PROGRESS,
@@ -14,6 +14,7 @@ import {
   applySessionFaviconHref,
   drawSessionFavicon,
   restoreStaticFavicon,
+  sessionFaviconCornerRadius,
   sessionFaviconDownloadProgress,
   sessionFaviconDrawKey,
   sessionFaviconRingRadius,
@@ -107,46 +108,71 @@ assert.equal(
   true
 );
 
+assert.equal(SESSION_FAVICON_BG, "#FF0020");
+assert.equal(SESSION_FAVICON_RING_TRACK, "rgba(0,0,0,0.12)");
+assert.equal(SESSION_FAVICON_RING_PROGRESS, "#7eb6ff");
+
 function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
   const calls: unknown[][] = [];
-  return {
+  const ctx: SessionFaviconContext & { calls: unknown[][] } = {
     calls,
+    fillStyle: "",
     strokeStyle: "",
     lineWidth: 0,
     lineCap: "",
     clearRect: (...args: unknown[]) => {
       calls.push(["clearRect", ...args]);
     },
-    drawImage: (...args: unknown[]) => {
-      calls.push(["drawImage", args[0], args[1], args[2], args[3], args[4]]);
-    },
     beginPath: () => {
       calls.push(["beginPath"]);
+    },
+    roundRect: (...args: unknown[]) => {
+      calls.push(["roundRect", ...args]);
+    },
+    fill: () => {
+      calls.push(["fill", ctx.fillStyle]);
     },
     arc: (...args: unknown[]) => {
       calls.push(["arc", ...args]);
     },
     stroke: () => {
-      calls.push(["stroke"]);
+      calls.push(["stroke", ctx.strokeStyle]);
     },
   };
+  return ctx;
+}
+
+function assertEmptyRedPlate(ctx: { calls: unknown[][] }) {
+  assert.equal(
+    ctx.calls.some((call) => call[0] === "drawImage"),
+    false,
+    "progress favicon does not draw the logo"
+  );
+  assert.deepEqual(ctx.calls.find((call) => call[0] === "roundRect"), [
+    "roundRect",
+    0,
+    0,
+    64,
+    64,
+    sessionFaviconCornerRadius(64),
+  ]);
+  assert.deepEqual(ctx.calls.find((call) => call[0] === "fill"), ["fill", SESSION_FAVICON_BG]);
 }
 
 {
   const ctx = mockContext();
-  const logo = { id: "logo" };
   const canvas = {
     width: SESSION_FAVICON_SIZE,
     height: SESSION_FAVICON_SIZE,
     getContext: () => ctx,
   };
-  assert.equal(drawSessionFavicon(canvas, logo, null), true);
+  assert.equal(drawSessionFavicon(canvas, null), true);
   assert.deepEqual(ctx.calls[0], ["clearRect", 0, 0, 64, 64]);
-  assert.deepEqual(ctx.calls[1], ["drawImage", logo, 0, 0, 64, 64]);
+  assertEmptyRedPlate(ctx);
   assert.equal(
     ctx.calls.some((call) => call[0] === "arc"),
     false,
-    "no downloads draw the logo only"
+    "no downloads draw the red plate only"
   );
 }
 
@@ -157,10 +183,12 @@ function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
     height: SESSION_FAVICON_SIZE,
     getContext: () => ctx,
   };
-  assert.equal(drawSessionFavicon(canvas, {}, 0), true);
+  assert.equal(drawSessionFavicon(canvas, 0), true);
+  assertEmptyRedPlate(ctx);
   const arcs = ctx.calls.filter((call) => call[0] === "arc");
   assert.equal(arcs.length, 1, "0% download paints the empty track");
   assert.equal(ctx.strokeStyle, SESSION_FAVICON_RING_TRACK);
+  assert.deepEqual(ctx.calls.find((call) => call[0] === "stroke"), ["stroke", "rgba(0,0,0,0.12)"]);
 }
 
 {
@@ -170,7 +198,8 @@ function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
     height: SESSION_FAVICON_SIZE,
     getContext: () => ctx,
   };
-  assert.equal(drawSessionFavicon(canvas, {}, 50), true);
+  assert.equal(drawSessionFavicon(canvas, 50), true);
+  assertEmptyRedPlate(ctx);
   assert.equal(ctx.lineCap, "round");
   assert.equal(ctx.lineWidth, SESSION_FAVICON_RING_WIDTH);
   const arcs = ctx.calls.filter((call) => call[0] === "arc");
@@ -182,6 +211,9 @@ function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
   assert.equal(arcs[1][3], radius);
   assert.equal(arcs[1][4], -Math.PI / 2);
   assert.equal(arcs[1][5], Math.PI / 2);
+  const strokes = ctx.calls.filter((call) => call[0] === "stroke");
+  assert.deepEqual(strokes[0], ["stroke", "rgba(0,0,0,0.12)"]);
+  assert.deepEqual(strokes[1], ["stroke", SESSION_FAVICON_RING_PROGRESS]);
   assert.equal(ctx.strokeStyle, SESSION_FAVICON_RING_PROGRESS);
 }
 
@@ -192,14 +224,15 @@ function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
     height: SESSION_FAVICON_SIZE,
     getContext: () => ctx,
   };
-  assert.equal(drawSessionFavicon(canvas, {}, 100), true);
+  assert.equal(drawSessionFavicon(canvas, 100), true);
+  assertEmptyRedPlate(ctx);
   const arcs = ctx.calls.filter((call) => call[0] === "arc");
   assert.deepEqual(arcs[1], ["arc", 32, 32, sessionFaviconRingRadius(64), 0, Math.PI * 2]);
 }
 
 {
   assert.equal(
-    drawSessionFavicon({ width: 64, height: 64, getContext: () => null }, {}, 40),
+    drawSessionFavicon({ width: 64, height: 64, getContext: () => null }, 40),
     false
   );
 }
@@ -268,11 +301,11 @@ const component = readFileSync(
 );
 const login = readFileSync(join(here, "../../components/app/login-screen.tsx"), "utf8");
 assert.match(component, /canvas\.toDataURL\("image\/png"\)/);
-assert.match(component, /SESSION_FAVICON_LOGO_SRC/);
+assert.match(component, /drawSessionFavicon\(canvas, nextProgress\)/);
 assert.match(component, /restoreStaticFavicon\(document\)/);
 assert.match(component, /shouldRedrawSessionFavicon/);
 assert.doesNotMatch(component, /downloadRate|uploadRate|formatCompactRate|fillText/);
-assert.equal(SESSION_FAVICON_LOGO_SRC, "/logo.png");
+assert.doesNotMatch(component, /SESSION_FAVICON_LOGO_SRC|logo\.png|new Image|drawImage/);
 assert.equal(STATIC_FAVICON_HREF, "/icon.png");
 assert.doesNotMatch(login, /SessionProgressFavicon|SessionSpeedFavicon/);
 

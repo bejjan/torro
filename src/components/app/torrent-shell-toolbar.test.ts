@@ -188,7 +188,7 @@ assert.match(shell, /setSearchPlaceholder\(torrentSearchPlaceholder/);
 assert.match(shell, /setAddTorrentLabel\(addTorrentShortcutTitle/);
 assert.match(shell, /placeholder=\{placeholder\}/);
 assert.match(shell, /focusVisibleTorrentSearch/);
-assert.match(shell, /setAddMenuOpen\(true\)/);
+assert.match(shell, /pickDefaultAddRef\.current\?\.\(\)/);
 assert.match(shell, /sourceMenuOpen=\{addMenuOpen\}/);
 assert.match(shell, /onSourceMenuOpenChange=\{setAddMenuOpen\}/);
 assert.doesNotMatch(shell, /setAddOpen\(true\)/);
@@ -253,5 +253,14 @@ assert.match(login, /stripExplicitPort/);
 assert.match(login, /submitFormOnInputEnter/);
 assert.match(login, /type="submit"/);
 assert.doesNotMatch(login, /Admin: synthetic session/);
+
+assert.match(shell, /isSessionExpiredMessage/);
+assert.match(shell, /auth\.check_session/);
+assert.match(shell, /visibilitychange/);
+assert.match(shell, /onLogoutRef\.current\(\)/);
+assert.match(shell, /GRID_POLL_MS = 2000/);
+assert.match(shell, /pollInFlight/);
+assert.match(shell, /uiRevision/);
+assert.match(shell, /uiRevision: uiRevision.current/);
 
 console.log("torrent-shell toolbar breakpoint tests passed");

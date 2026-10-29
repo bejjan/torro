@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { clientCapabilities, getStoredClientKind, rpc } from "@/lib/deluge/client";
+import { isSessionExpiredMessage } from "@/lib/deluge/session-expired";
 import { formatBytes, formatRate } from "@/lib/deluge/format";
 import { GRID_KEYS } from "@/lib/deluge/keys";
 import { processDownloadFinishedNotifications, resetNotifyCompleteMemory } from "@/lib/notify-complete";
@@ -136,6 +137,9 @@ import {
 } from "@/lib/deluge/web-config";
 import { cn } from "@/lib/utils";
 
+/** Full catalog poll. One second of every torrent is enough to saturate a home link. */
+const GRID_POLL_MS = 2000;
+
 export function TorrentShell({
   onLogout,
 }: {
@@ -160,6 +164,7 @@ export function TorrentShell({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [addOpen, setAddOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const pickDefaultAddRef = useRef<(() => void) | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
@@ -190,7 +195,11 @@ export function TorrentShell({
   const addOpenRef = useRef(addOpen);
   const wantSearchFocusRef = useRef(false);
   const pollGen = useRef(0);
+  const pollInFlight = useRef(false);
+  const uiRevision = useRef<number | null>(null);
   const switchingHosts = useRef(false);
+  const onLogoutRef = useRef(onLogout);
+  onLogoutRef.current = onLogout;
   const lastRatesRef = useRef({ download: 0, upload: 0 });
   const [rateSamples, setRateSamples] = useState<SessionRateSample[]>([]);
   const [searchFieldTitle, setSearchFieldTitle] = useState<string | undefined>(undefined);
@@ -300,11 +309,18 @@ export function TorrentShell({
   }, []);
 
   const poll = useCallback(async () => {
-    if (switchingHosts.current) return;
+    if (switchingHosts.current || pollInFlight.current) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     const gen = ++pollGen.current;
+    pollInFlight.current = true;
     try {
-      const result = await rpc<UiUpdate>("web.update_ui", [[...GRID_KEYS], {}]);
+      const result = await rpc<UiUpdate>("web.update_ui", [[...GRID_KEYS], {}], {
+        uiRevision: uiRevision.current,
+      });
       if (switchingHosts.current || gen !== pollGen.current) return;
+      if (typeof result.revision === "number") {
+        uiRevision.current = result.connected ? result.revision : null;
+      }
       setUi((prev) => mergeUiUpdate(prev, result));
       const held = holdLastSessionRates(lastRatesRef.current, result.stats);
       lastRatesRef.current = held;
@@ -313,8 +329,15 @@ export function TorrentShell({
       if (!result.connected) setError("Daemon disconnected");
     } catch (err) {
       if (switchingHosts.current || gen !== pollGen.current) return;
-      setError(err instanceof Error ? err.message : "Update failed");
+      const message = err instanceof Error ? err.message : "Update failed";
+      if (isSessionExpiredMessage(message)) {
+        pollGen.current += 1;
+        onLogoutRef.current();
+        return;
+      }
+      setError(message);
     } finally {
+      pollInFlight.current = false;
       if (!switchingHosts.current && gen === pollGen.current) setLoading(false);
     }
   }, []);
@@ -322,6 +345,7 @@ export function TorrentShell({
   const beginHostSwitch = useCallback(() => {
     switchingHosts.current = true;
     pollGen.current += 1;
+    uiRevision.current = null;
     setUi(null);
     setSelected(new Set());
     setActiveId(null);
@@ -336,12 +360,44 @@ export function TorrentShell({
 
   useEffect(() => {
     void poll();
-    const id = setInterval(() => void poll(), 1000);
+    const id = setInterval(() => void poll(), GRID_POLL_MS);
     return () => {
       pollGen.current += 1;
       clearInterval(id);
     };
   }, [poll]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function recheckSession() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const ok = await rpc<boolean>("auth.check_session");
+        if (cancelled) return;
+        if (!ok) {
+          onLogoutRef.current();
+          return;
+        }
+        void poll();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        if (!cancelled && isSessionExpiredMessage(message)) onLogoutRef.current();
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void recheckSession();
+    };
+    const onPageShow = () => {
+      void recheckSession();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const refreshLabels = useCallback(async () => {
     try {
@@ -488,7 +544,12 @@ export function TorrentShell({
         await rpc(method, [ids]);
         await poll();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Action failed");
+        const message = err instanceof Error ? err.message : "Action failed";
+        if (isSessionExpiredMessage(message)) {
+          onLogoutRef.current();
+          return;
+        }
+        toast.error(message);
       }
     },
     [poll, selected]
@@ -502,6 +563,11 @@ export function TorrentShell({
         for (const id of ids) await rpc(LABEL_RPC.setTorrent, [id, label]);
         await poll();
       } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        if (isSessionExpiredMessage(message)) {
+          onLogoutRef.current();
+          return;
+        }
         toast.error(labelRpcErrorMessage(err, "Label failed"));
       }
     },
@@ -516,7 +582,12 @@ export function TorrentShell({
         await rpc("core.set_torrent_options", [ids, options]);
         await poll();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Action failed");
+        const message = err instanceof Error ? err.message : "Action failed";
+        if (isSessionExpiredMessage(message)) {
+          onLogoutRef.current();
+          return;
+        }
+        toast.error(message);
       }
     },
     [poll, selected]
@@ -587,7 +658,7 @@ export function TorrentShell({
       }
       if (decideAddTorrentShortcutAction(shortcutInput) === "open-add") {
         event.preventDefault();
-        if (!addOpenRef.current) setAddMenuOpen(true);
+        if (!addOpenRef.current) pickDefaultAddRef.current?.();
         return;
       }
       const action = decideEscapeSelectionAction({
@@ -762,6 +833,7 @@ export function TorrentShell({
               onOpenChange={setAddOpen}
               sourceMenuOpen={addMenuOpen}
               onSourceMenuOpenChange={setAddMenuOpen}
+              pickDefaultAddRef={pickDefaultAddRef}
               defaultPath={downloadPath}
               label={addTorrentLabel}
               onAdded={() => {

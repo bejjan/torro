@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import {
-  SESSION_FAVICON_LOGO_SRC,
   SESSION_FAVICON_MIN_INTERVAL_MS,
   SESSION_FAVICON_SIZE,
   STATIC_FAVICON_HREF,
@@ -23,17 +22,13 @@ export function SessionProgressFavicon({ progress }: { progress: number | null }
     canvas.width = SESSION_FAVICON_SIZE;
     canvas.height = SESSION_FAVICON_SIZE;
 
-    const logo = new Image();
-    logo.decoding = "async";
-
     let lastKey = "";
     let lastDrawAt = 0;
     let timer = 0;
     let cancelled = false;
-    let logoReady = false;
 
     const paint = () => {
-      if (cancelled || !logoReady) return;
+      if (cancelled) return;
       const nextProgress = progressRef.current;
       const nextKey = sessionFaviconDrawKey(nextProgress);
       const now = performance.now();
@@ -60,7 +55,7 @@ export function SessionProgressFavicon({ progress }: { progress: number | null }
         lastDrawAt = now;
         return;
       }
-      if (!drawSessionFavicon(canvas, logo, nextProgress)) return;
+      if (!drawSessionFavicon(canvas, nextProgress)) return;
       try {
         applySessionFaviconHref(document, canvas.toDataURL("image/png"));
       } catch {
@@ -71,20 +66,12 @@ export function SessionProgressFavicon({ progress }: { progress: number | null }
     };
 
     paintRef.current = paint;
-
-    const onLoad = () => {
-      logoReady = true;
-      paint();
-    };
-    logo.addEventListener("load", onLoad);
-    logo.src = SESSION_FAVICON_LOGO_SRC;
-    if (logo.complete && logo.naturalWidth > 0) onLoad();
+    paint();
 
     return () => {
       cancelled = true;
       paintRef.current = () => {};
       if (timer) window.clearTimeout(timer);
-      logo.removeEventListener("load", onLoad);
       restoreStaticFavicon(document);
     };
   }, []);
