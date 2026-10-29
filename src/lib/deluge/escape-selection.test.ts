@@ -162,10 +162,10 @@ assert.equal(torrentSearchPlaceholder(false), "Search torrents (Ctrl+F)");
 assert.equal(torrentSearchPlaceholder(true), torrentSearchShortcutTitle(true));
 assert.equal(torrentSearchPlaceholder(false), torrentSearchShortcutTitle(false));
 assert.equal(DEFAULT_ADD_TORRENT_LABEL, "Add torrent");
-assert.equal(addTorrentShortcutLabel(true), "⌘A");
-assert.equal(addTorrentShortcutLabel(false), "Ctrl+A");
-assert.equal(addTorrentShortcutTitle(true), "Add torrent (⌘A)");
-assert.equal(addTorrentShortcutTitle(false), "Add torrent (Ctrl+A)");
+assert.equal(addTorrentShortcutLabel(true), "⌘D");
+assert.equal(addTorrentShortcutLabel(false), "Ctrl+D");
+assert.equal(addTorrentShortcutTitle(true), "Add torrent (⌘D)");
+assert.equal(addTorrentShortcutTitle(false), "Add torrent (Ctrl+D)");
 
 assert.equal(find(), "focus-search", "Ctrl+F focuses search on Windows/Linux");
 assert.equal(find({ isMac: true, metaKey: true, ctrlKey: false }), "focus-search", "⌘F focuses search on Mac");
@@ -186,7 +186,7 @@ assert.equal(
 
 function add(partial: Partial<ModifierShortcutInput> = {}): ReturnType<typeof decideAddTorrentShortcutAction> {
   return decideAddTorrentShortcutAction({
-    key: "a",
+    key: "d",
     metaKey: false,
     ctrlKey: true,
     overlayOpen: false,
@@ -196,17 +196,19 @@ function add(partial: Partial<ModifierShortcutInput> = {}): ReturnType<typeof de
   });
 }
 
-assert.equal(add(), "open-add", "Ctrl+A opens add on Windows/Linux");
-assert.equal(add({ isMac: true, metaKey: true, ctrlKey: false }), "open-add", "⌘A opens add on Mac");
-assert.equal(add({ key: "A", isMac: true, metaKey: true, ctrlKey: false }), "open-add");
-assert.equal(add({ isMac: true, metaKey: false, ctrlKey: true }), "none", "Ctrl+A is not the Mac shortcut");
-assert.equal(add({ isMac: false, metaKey: true, ctrlKey: false }), "none", "⌘A is not the Windows shortcut");
+assert.equal(add(), "open-add", "Ctrl+D opens add on Windows/Linux");
+assert.equal(add({ isMac: true, metaKey: true, ctrlKey: false }), "open-add", "⌘D opens add on Mac");
+assert.equal(add({ key: "D", isMac: true, metaKey: true, ctrlKey: false }), "open-add");
+assert.equal(add({ key: "a" }), "none", "Ctrl+A stays Select All");
+assert.equal(add({ key: "a", isMac: true, metaKey: true, ctrlKey: false }), "none", "⌘A stays Select All");
+assert.equal(add({ isMac: true, metaKey: false, ctrlKey: true }), "none", "Ctrl+D is not the Mac shortcut");
+assert.equal(add({ isMac: false, metaKey: true, ctrlKey: false }), "none", "⌘D is not the Windows shortcut");
 assert.equal(add({ key: "n" }), "none");
 assert.equal(add({ altKey: true }), "none");
 assert.equal(add({ shiftKey: true }), "none");
 assert.equal(add({ defaultPrevented: true }), "none");
 assert.equal(add({ overlayOpen: true }), "none", "open dialog/menu keeps the shortcut");
-assert.equal(add({ targetKind: "input" }), "none", "other text fields keep Select All");
-assert.equal(add({ targetKind: "search" }), "none", "search keeps Select All");
+assert.equal(add({ targetKind: "input" }), "none", "text fields keep their own shortcuts");
+assert.equal(add({ targetKind: "search" }), "none", "search keeps its own shortcuts");
 
 console.log("escape-selection tests passed");
