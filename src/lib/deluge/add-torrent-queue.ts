@@ -174,6 +174,39 @@ export function findDuplicate(
   );
 }
 
+export const ALREADY_IN_SESSION_ERROR = "Already in the session";
+
+/** Deluge does not answer `web.add_torrents` for a hash that is already loaded. */
+export function sessionHasInfoHash(
+  torrentIds: Iterable<string> | null | undefined,
+  hash: string
+): boolean {
+  const needle = normalizeInfoHash(hash);
+  if (!needle || !torrentIds) return false;
+  for (const id of torrentIds) {
+    if (normalizeInfoHash(id) === needle) return true;
+  }
+  return false;
+}
+
+export function splitAlreadyInSession(
+  items: readonly PendingAdd[],
+  torrentIds: Iterable<string> | null | undefined
+): { fresh: PendingAdd[]; existing: PendingAdd[] } {
+  const fresh: PendingAdd[] = [];
+  const existing: PendingAdd[] = [];
+  for (const item of items) {
+    if (item.infoHash && sessionHasInfoHash(torrentIds, item.infoHash)) existing.push(item);
+    else fresh.push(item);
+  }
+  return { fresh, existing };
+}
+
+export function alreadyInSessionMessage(count: number): string {
+  if (count <= 1) return "This torrent is already in the session";
+  return `${count} torrents are already in the session`;
+}
+
 export function parseMagnetLines(text: string): string[] {
   return text
     .split(/\n+/)

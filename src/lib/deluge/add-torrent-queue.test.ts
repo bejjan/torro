@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  alreadyInSessionMessage,
   addButtonLabel,
   addPartialFailureMessage,
   addSubmitBatches,
@@ -15,6 +16,8 @@ import {
   parseMagnetLines,
   readyAdds,
   selectionAfterRemove,
+  sessionHasInfoHash,
+  splitAlreadyInSession,
   sourceHint,
   torrentFilesFromList,
   urlBasename,
@@ -134,6 +137,16 @@ function item(partial: Partial<PendingAdd> & Pick<PendingAdd, "id">): PendingAdd
     addPartialFailureMessage(2, "Invalid magnet URI"),
     "2 torrents were added. The rest failed: Invalid magnet URI"
   );
+  assert.equal(alreadyInSessionMessage(1), "This torrent is already in the session");
+  assert.equal(alreadyInSessionMessage(2), "2 torrents are already in the session");
+  assert.equal(sessionHasInfoHash(["ABC"], "abc"), true);
+  assert.equal(sessionHasInfoHash(["other"], "abc"), false);
+  assert.equal(sessionHasInfoHash(null, "abc"), false);
+  const known = item({ id: "known", infoHash: "abc" });
+  const novel = item({ id: "novel", infoHash: "def" });
+  const split = splitAlreadyInSession([known, novel], ["ABC"]);
+  assert.deepEqual(split.existing.map((row) => row.id), ["known"]);
+  assert.deepEqual(split.fresh.map((row) => row.id), ["novel"]);
 }
 
 {

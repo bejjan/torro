@@ -5,8 +5,11 @@ import {
   TORRENT_UPLOAD_SLOT_LIMIT_PRESETS,
   torrentAutoManagedLabel,
   torrentAutoManagedRadioValue,
+  torrentLimitCustomMarks,
   torrentLimitMenuCaps,
   torrentLimitRadioValue,
+  torrentNumericLimitIsDefault,
+  type TorrentMenuLimits,
 } from "./torrent-limit-menu";
 
 assert.deepEqual([...TORRENT_SPEED_LIMIT_PRESETS_KIB], [5, 10, 30, 80, 300]);
@@ -47,5 +50,69 @@ assert.equal(torrentLimitRadioValue(0, TORRENT_UPLOAD_SLOT_LIMIT_PRESETS), "0");
 
 assert.equal(torrentAutoManagedRadioValue(true), "on");
 assert.equal(torrentAutoManagedRadioValue(false), "off");
+
+assert.equal(torrentNumericLimitIsDefault(-1), true);
+assert.equal(torrentNumericLimitIsDefault(Number.NaN), true);
+assert.equal(torrentNumericLimitIsDefault(undefined), true);
+assert.equal(torrentNumericLimitIsDefault(null), true);
+assert.equal(torrentNumericLimitIsDefault(0), false);
+assert.equal(torrentNumericLimitIsDefault(5), false);
+
+const unlimited: TorrentMenuLimits = {
+  max_download_speed: -1,
+  max_upload_speed: -1,
+  max_connections: -1,
+  max_upload_slots: -1,
+};
+const delugeCaps = torrentLimitMenuCaps("deluge");
+const qbCaps = torrentLimitMenuCaps("qbittorrent");
+
+assert.deepEqual(torrentLimitCustomMarks([unlimited], delugeCaps), {
+  downloadSpeed: false,
+  uploadSpeed: false,
+  connections: false,
+  uploadSlots: false,
+  any: false,
+});
+assert.deepEqual(
+  torrentLimitCustomMarks(
+    [{ ...unlimited, max_download_speed: 30, max_upload_slots: 0 }],
+    delugeCaps
+  ),
+  {
+    downloadSpeed: true,
+    uploadSpeed: false,
+    connections: false,
+    uploadSlots: true,
+    any: true,
+  }
+);
+assert.deepEqual(
+  torrentLimitCustomMarks(
+    [unlimited, { ...unlimited, max_upload_speed: 10 }],
+    delugeCaps
+  ),
+  {
+    downloadSpeed: false,
+    uploadSpeed: true,
+    connections: false,
+    uploadSlots: false,
+    any: true,
+  }
+);
+assert.deepEqual(
+  torrentLimitCustomMarks(
+    [{ ...unlimited, max_connections: 50, max_upload_slots: 2 }],
+    qbCaps
+  ),
+  {
+    downloadSpeed: false,
+    uploadSpeed: false,
+    connections: false,
+    uploadSlots: false,
+    any: false,
+  }
+);
+assert.deepEqual(torrentLimitCustomMarks([], delugeCaps).any, false);
 
 console.log("torrent-limit-menu tests passed");

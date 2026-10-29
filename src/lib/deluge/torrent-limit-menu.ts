@@ -51,3 +51,61 @@ export function torrentLimitRadioValue(
 export function torrentAutoManagedRadioValue(enabled: boolean): "on" | "off" {
   return enabled ? "on" : "off";
 }
+
+/** Fields the Limits context menu can mark as non-default. */
+export type TorrentMenuLimits = {
+  max_download_speed: number;
+  max_upload_speed: number;
+  max_connections: number;
+  max_upload_slots: number;
+};
+
+export type TorrentLimitCustomMarks = {
+  downloadSpeed: boolean;
+  uploadSpeed: boolean;
+  connections: boolean;
+  uploadSlots: boolean;
+  any: boolean;
+};
+
+/**
+ * Unlimited is −1. Missing or non-finite values match that default so a row
+ * does not light up before the status fields arrive. 0 is a real cap.
+ */
+export function torrentNumericLimitIsDefault(value: number | null | undefined): boolean {
+  return value == null || !Number.isFinite(value) || value < 0;
+}
+
+/**
+ * Marks for the Limits submenu. A field lights up when any torrent in the
+ * menu's action set has a non-default value, and only when that field is
+ * actually shown for the client. Auto Managed is a flag, not one of these caps.
+ */
+export function torrentLimitCustomMarks(
+  torrents: readonly TorrentMenuLimits[],
+  caps: TorrentLimitMenuCaps
+): TorrentLimitCustomMarks {
+  const marks: TorrentLimitCustomMarks = {
+    downloadSpeed: false,
+    uploadSpeed: false,
+    connections: false,
+    uploadSlots: false,
+    any: false,
+  };
+  for (const torrent of torrents) {
+    if (caps.downloadSpeed && !torrentNumericLimitIsDefault(torrent.max_download_speed)) {
+      marks.downloadSpeed = true;
+    }
+    if (caps.uploadSpeed && !torrentNumericLimitIsDefault(torrent.max_upload_speed)) {
+      marks.uploadSpeed = true;
+    }
+    if (caps.connections && !torrentNumericLimitIsDefault(torrent.max_connections)) {
+      marks.connections = true;
+    }
+    if (caps.uploadSlots && !torrentNumericLimitIsDefault(torrent.max_upload_slots)) {
+      marks.uploadSlots = true;
+    }
+  }
+  marks.any = marks.downloadSpeed || marks.uploadSpeed || marks.connections || marks.uploadSlots;
+  return marks;
+}

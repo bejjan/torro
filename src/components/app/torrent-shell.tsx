@@ -835,6 +835,7 @@ export function TorrentShell({
               onSourceMenuOpenChange={setAddMenuOpen}
               pickDefaultAddRef={pickDefaultAddRef}
               defaultPath={downloadPath}
+              existingTorrentIds={Object.keys(ui?.torrents ?? {})}
               label={addTorrentLabel}
               onAdded={() => {
                 setFilters((prev) => selectSidebarState(prev, FILTER_DOWNLOADING));

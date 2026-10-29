@@ -5,10 +5,10 @@ export const STATIC_FAVICON_HREF = "/icon.png";
 export const SESSION_FAVICON_MIN_INTERVAL_MS = 250;
 export const SESSION_FAVICON_MARK = "data-session-progress-favicon";
 export const SESSION_FAVICON_RING_WIDTH = 7;
-export const SESSION_FAVICON_RING_INSET = 5;
+export const SESSION_FAVICON_RING_INSET = 6;
 /** Unfinished arc. Black at 12% opacity so the red plate shows through. */
 export const SESSION_FAVICON_RING_TRACK = "rgba(0,0,0,0.12)";
-export const SESSION_FAVICON_RING_PROGRESS = "#7eb6ff";
+export const SESSION_FAVICON_RING_PROGRESS = "#ffffff";
 /** Red plate from `public/logo.svg`, without the logo mark. */
 export const SESSION_FAVICON_BG = "#FF0020";
 /** Corner radius of the 64px logo plate. */
