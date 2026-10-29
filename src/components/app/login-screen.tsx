@@ -58,14 +58,17 @@ import {
   normalizeTransmissionRpcUrl,
 } from "@/lib/transmission/url";
 import { cn } from "@/lib/utils";
+import delugeIcon from "../../../public/clients/deluge.png";
+import qbittorrentIcon from "../../../public/clients/qbittorrent.png";
+import transmissionIcon from "../../../public/clients/transmission.png";
 
 type LoginView = "connect" | "demo";
 type DemoCatalog = "sample" | "loadtest";
 
-const CLIENT_OPTIONS: { id: ClientKind; label: string; icon: string }[] = [
-  { id: "deluge", label: "Deluge", icon: "/clients/deluge.png" },
-  { id: "transmission", label: "Transmission", icon: "/clients/transmission.png" },
-  { id: "qbittorrent", label: "qBittorrent", icon: "/clients/qbittorrent.svg" },
+const CLIENT_OPTIONS: { id: ClientKind; label: string; icon: { src: string } }[] = [
+  { id: "deluge", label: "Deluge", icon: delugeIcon },
+  { id: "transmission", label: "Transmission", icon: transmissionIcon },
+  { id: "qbittorrent", label: "qBittorrent", icon: qbittorrentIcon },
 ];
 
 function initialKind(): ClientKind {
@@ -233,7 +236,7 @@ function ClientPicker({
         children: (
           <>
             <img
-              src={option.icon}
+              src={option.icon.src}
               alt=""
               width={40}
               height={40}
