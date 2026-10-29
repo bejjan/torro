@@ -1,7 +1,8 @@
 "use client";
 
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { FileKindIcon, FolderTreeIcon } from "@/components/app/file-tree-icons";
 import { FilePrioritySelect } from "@/components/app/file-priority-select";
@@ -57,6 +58,33 @@ function FileTreeNode({
   onApplied: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(() => defaultFolderExpanded(depth, huge));
+  const leafScrollRef = useRef<HTMLDivElement>(null);
+  const entries = node.type === "dir" ? Object.entries(node.contents) : [];
+  const showRow = node.type === "dir" && Boolean(path);
+  const showChildren = node.type === "dir" && (!showRow || open);
+  const leavesOnly = entries.length > 0 && entries.every(([, child]) => child.type === "file");
+  const virtualize = leavesOnly && entries.length > 80 && showChildren;
+  // useVirtualizer returns unstable function identities; skip React Compiler memoization of this body.
+  // eslint-disable-next-line react-hooks/incompatible-library -- virtualizer owns the long file list
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => leafScrollRef.current,
+    estimateSize: () => 32,
+    overscan: 16,
+    enabled: virtualize,
+  });
+  const summary = useMemo(() => {
+    if (node.type === "file") return null;
+    const files: Extract<FileNode, { type: "file" }>[] = [];
+    walkFiles(node, (f) => files.push(f));
+    const first = files[0];
+    const shared =
+      first &&
+      files.every((f) => canonicalizeFilePriority(f.priority) === canonicalizeFilePriority(first.priority))
+        ? canonicalizeFilePriority(first.priority)
+        : null;
+    return { indexes: files.map((f) => f.index), shared, size: fileTreeSize(node) };
+  }, [node]);
 
   if (node.type === "file") {
     return (
@@ -77,16 +105,7 @@ function FileTreeNode({
     );
   }
 
-  const files: Extract<FileNode, { type: "file" }>[] = [];
-  walkFiles(node, (f) => files.push(f));
-  const indexes = files.map((f) => f.index);
-  const first = files[0];
-  const shared =
-    first &&
-    files.every((f) => canonicalizeFilePriority(f.priority) === canonicalizeFilePriority(first.priority))
-      ? canonicalizeFilePriority(first.priority)
-      : null;
-  const showRow = Boolean(path);
+  if (!summary) return null;
 
   return (
     <div className="min-w-0 text-sm">
@@ -106,32 +125,66 @@ function FileTreeNode({
           icon={<FolderTreeIcon open={open} />}
           name={name}
           nameClass="font-medium"
-          size={fileTreeSize(node)}
+          size={summary.size}
           action={
             <FilePrioritySelect
-              value={shared ?? "mixed"}
-              mixed={shared == null}
+              value={summary.shared ?? "mixed"}
+              mixed={summary.shared == null}
               onChange={(priority) => {
-                void setFilePriorities(torrentId, indexes, priority, onApplied);
+                void setFilePriorities(torrentId, summary.indexes, priority, onApplied);
               }}
             />
           }
         />
       ) : null}
-      <div className={showRow ? (open ? "ml-3 min-w-0 overflow-hidden border-l pl-3" : "hidden") : "min-w-0"}>
-        {Object.entries(node.contents).map(([childName, child]) => (
-          <FileTreeNode
-            key={childName}
-            node={child}
-            torrentId={torrentId}
-            name={childName}
-            path={`${path}/${childName}`}
-            depth={depth + 1}
-            huge={huge}
-            onApplied={onApplied}
-          />
-        ))}
-      </div>
+      {showChildren ? (
+        virtualize ? (
+          <div
+            ref={leafScrollRef}
+            className={showRow ? "ml-3 max-h-80 min-w-0 overflow-auto border-l pl-3" : "max-h-80 min-w-0 overflow-auto"}
+          >
+            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+              {virtualizer.getVirtualItems().map((item) => {
+                const [childName, child] = entries[item.index]!;
+                return (
+                  <div
+                    key={childName}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute top-0 left-0 w-full"
+                    style={{ transform: `translateY(${item.start}px)` }}
+                  >
+                    <FileTreeNode
+                      node={child}
+                      torrentId={torrentId}
+                      name={childName}
+                      path={`${path}/${childName}`}
+                      depth={depth + 1}
+                      huge={huge}
+                      onApplied={onApplied}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className={showRow ? "ml-3 min-w-0 overflow-hidden border-l pl-3" : "min-w-0"}>
+            {entries.map(([childName, child]) => (
+              <FileTreeNode
+                key={childName}
+                node={child}
+                torrentId={torrentId}
+                name={childName}
+                path={`${path}/${childName}`}
+                depth={depth + 1}
+                huge={huge}
+                onApplied={onApplied}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
     </div>
   );
 }
