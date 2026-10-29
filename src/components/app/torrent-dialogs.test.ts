@@ -167,6 +167,20 @@ assert.match(fileInput, /tabIndex=\{-1\}/);
 assert.match(fileInput, /className="hidden"/);
 assert.doesNotMatch(fileInput, /autoFocus/);
 
+const addError = addDialog.slice(
+  addDialog.indexOf("{error ?"),
+  addDialog.indexOf("PREF_DIALOG_SPLIT_CLASS")
+);
+assert.match(addError, /<AddErrorAlert/);
+assert.match(addError, /rounded-none border-x-0 border-t-0 bg-destructive\/10 px-4 py-2\.5/);
+assert.doesNotMatch(addError, /mx-4/);
+assert.match(addSource, /function AddErrorAlert/);
+assert.match(addSource, /min-w-0 max-w-full shrink-0/);
+assert.match(addSource, /min-w-0 text-wrap break-words/);
+assert.match(sourcePrompt, /<AddErrorAlert id="add-source-error"/);
+assert.match(sourcePrompt, /grid min-w-0 gap-3/);
+assert.doesNotMatch(sourcePrompt, /className="text-sm text-destructive"/);
+
 assert.match(queuePane, /id="add-torrent-source"/);
 assert.match(queuePane, /Add torrent/);
 assert.match(queuePane, /<DropdownMenu/);
@@ -207,11 +221,9 @@ assert.match(addDialog, /sessionGen/);
 assert.match(addDialog, /onAdded\?: \(\) => void/);
 assert.match(addDialog, /web\.add_torrents/);
 assert.match(addDialog, /items\.map\(\(item\) => \(\{ path: item\.path, options: optionsFromPending\(item\) \}\)\)/);
-assert.match(
-  addDialog,
-  /toast\.success\(addSuccessToast\(toAdd\.length\)\);\s*onAdded\?\.\(\);\s*onOpenChange\(false\);/
-);
-assert.match(addDialog, /addSubmitBatches\(toAdd\)/);
+assert.match(addDialog, /toast\.success\(addSuccessToast\(fresh\.length\)\)/);
+assert.match(addDialog, /onOpenChange\(false\)/);
+assert.match(addDialog, /addSubmitBatches\(fresh\)/);
 assert.match(addDialog, /remainingAfterPartialAdd\(prev, succeededIds\)/);
 assert.match(addDialog, /addPartialFailureMessage\(/);
 assert.equal(

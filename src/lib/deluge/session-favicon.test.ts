@@ -110,7 +110,7 @@ assert.equal(
 
 assert.equal(SESSION_FAVICON_BG, "#FF0020");
 assert.equal(SESSION_FAVICON_RING_TRACK, "rgba(0,0,0,0.12)");
-assert.equal(SESSION_FAVICON_RING_PROGRESS, "#7eb6ff");
+assert.equal(SESSION_FAVICON_RING_PROGRESS, "#ffffff");
 
 function mockContext(): SessionFaviconContext & { calls: unknown[][] } {
   const calls: unknown[][] = [];

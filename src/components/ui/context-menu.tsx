@@ -119,9 +119,12 @@ function ContextMenuSubTrigger({
   className,
   inset,
   children,
+  mark,
   ...props
 }: ContextMenuPrimitive.SubmenuTrigger.Props & {
   inset?: boolean
+  /** Trailing hint, sitting just left of the submenu chevron. */
+  mark?: React.ReactNode
 }) {
   return (
     <ContextMenuPrimitive.SubmenuTrigger
@@ -134,7 +137,8 @@ function ContextMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto" />
+      {mark ? <span className="ml-auto flex items-center">{mark}</span> : null}
+      <ChevronRightIcon className={cn(!mark && "ml-auto")} />
     </ContextMenuPrimitive.SubmenuTrigger>
   )
 }

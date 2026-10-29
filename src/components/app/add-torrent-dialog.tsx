@@ -39,10 +39,12 @@ import { clientCapabilities, DelugeError, getStoredClientKind, rpc, uploadTorren
 import { formatBytes } from "@/lib/deluge/format";
 import {
   ADD_CONFIG_KEYS,
+  ALREADY_IN_SESSION_ERROR,
   addButtonLabel,
   addPartialFailureMessage,
   addSubmitBatches,
   addSuccessToast,
+  alreadyInSessionMessage,
   canSubmitQueue,
   createPendingAdd,
   defaultsFromConfig,
@@ -54,6 +56,8 @@ import {
   patchPendingAdds,
   readyAdds,
   remainingAfterPartialAdd,
+  sessionHasInfoHash,
+  splitAlreadyInSession,
   removePendingAdds,
   selectionAfterRemove,
   sourceHint,
@@ -105,6 +109,24 @@ function errMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
+function AddErrorAlert({
+  id,
+  message,
+  className,
+}: {
+  id?: string;
+  message: string;
+  className?: string;
+}) {
+  return (
+    <Alert variant="destructive" className={cn("min-w-0 max-w-full shrink-0", className)}>
+      <AlertDescription id={id} className="min-w-0 text-wrap break-words">
+        {message}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 const ADD_TOOLBAR_TRIGGER_CLASS = "h-8 min-w-0 shrink-0 px-2 xl:shrink xl:px-2.5";
 
 export function AddTorrentDialog({
@@ -114,6 +136,7 @@ export function AddTorrentDialog({
   onSourceMenuOpenChange,
   pickDefaultAddRef,
   defaultPath,
+  existingTorrentIds,
   label = DEFAULT_ADD_TORRENT_LABEL,
   onAdded,
 }: {
@@ -124,6 +147,8 @@ export function AddTorrentDialog({
   /** Called from the add shortcut so the file picker stays inside the key gesture. */
   pickDefaultAddRef?: RefObject<(() => void) | null>;
   defaultPath: string;
+  /** Info-hashes already loaded. Deluge never answers an add for one of these. */
+  existingTorrentIds?: readonly string[];
   label?: string;
   onAdded?: () => void;
 }) {
@@ -294,6 +319,22 @@ export function AddTorrentDialog({
         skipped = true;
         return prev.filter((item) => item.id !== id);
       }
+      if (sessionHasInfoHash(existingTorrentIds, next.infoHash)) {
+        return prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                path: next.path,
+                label: next.name,
+                infoHash: next.infoHash,
+                tree: next.tree,
+                priorities: next.priorities,
+                status: "error" as const,
+                error: ALREADY_IN_SESSION_ERROR,
+              }
+            : item
+        );
+      }
       return prev.map((item) =>
         item.id === id
           ? {
@@ -316,6 +357,8 @@ export function AddTorrentDialog({
         return nextSelected;
       });
       toast.message(`${next.name} is already in the list`);
+    } else if (sessionHasInfoHash(existingTorrentIds, next.infoHash)) {
+      toast.error(`${next.name} is already in the session`);
     }
   }
 
@@ -503,9 +546,26 @@ export function AddTorrentDialog({
       setError("Wait for the torrent contents to load, or add the file again");
       return;
     }
+    const { fresh, existing } = splitAlreadyInSession(toAdd, existingTorrentIds);
+    if (existing.length) {
+      const existingIds = new Set(existing.map((item) => item.id));
+      setQueue((prev) =>
+        prev.map((item) =>
+          existingIds.has(item.id)
+            ? { ...item, status: "error" as const, error: ALREADY_IN_SESSION_ERROR }
+            : item
+        )
+      );
+      if (!fresh.length) {
+        const message = alreadyInSessionMessage(existing.length);
+        setError(message);
+        toast.error(message);
+        return;
+      }
+    }
     const notifyIds: string[] = [];
     const succeededIds = new Set<string>();
-    const wantsNotify = toAdd.some((item) => item.notifyOnComplete);
+    const wantsNotify = fresh.some((item) => item.notifyOnComplete);
     if (wantsNotify) {
       void requestNotifyIfNeeded();
       beginNotifyAdd();
@@ -514,7 +574,7 @@ export function AddTorrentDialog({
     setBusy(true);
     setError(null);
     try {
-      const { fileNotify, fileSilent, magnets } = addSubmitBatches(toAdd);
+      const { fileNotify, fileSilent, magnets } = addSubmitBatches(fresh);
       async function addFileUrlGroup(items: PendingAdd[], watch: boolean) {
         if (!items.length) return;
         const ids = await addFileUrlBatch(items);
@@ -534,9 +594,18 @@ export function AddTorrentDialog({
         if (item.notifyOnComplete) notifyIds.push(...ids);
       }
       if (wantsNotify) registerNotifyTorrentIds(notifyIds, { seedIncomplete: true });
-      toast.success(addSuccessToast(toAdd.length));
+      if (existing.length) {
+        const message = addPartialFailureMessage(
+          fresh.length,
+          alreadyInSessionMessage(existing.length)
+        );
+        setError(alreadyInSessionMessage(existing.length));
+        toast.error(message);
+      } else {
+        toast.success(addSuccessToast(fresh.length));
+        onOpenChange(false);
+      }
       onAdded?.();
-      onOpenChange(false);
     } catch (err) {
       if (wantsNotify) {
         if (notifyIds.length) registerNotifyTorrentIds(notifyIds, { seedIncomplete: true });
@@ -628,9 +697,10 @@ export function AddTorrentDialog({
           }}
         >
           {error ? (
-            <Alert variant="destructive" className="mx-4 mt-3">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <AddErrorAlert
+              message={error}
+              className="rounded-none border-x-0 border-t-0 bg-destructive/10 px-4 py-2.5"
+            />
           ) : null}
           <div className={cn(PREF_DIALOG_SPLIT_CLASS, "min-h-0 flex-1")}>
             <QueuePane
@@ -787,7 +857,7 @@ function SourcePromptDialog({
   return (
     <Dialog open={kind != null} onOpenChange={(next) => !next && onClose()}>
       <DialogContent
-        className="z-[60] gap-3 sm:max-w-md"
+        className="z-[60] min-w-0 gap-3 sm:max-w-md"
         initialFocus={isMagnet ? magnetRef : inputRef}
       >
         <DialogHeader>
@@ -799,7 +869,7 @@ function SourcePromptDialog({
           </DialogDescription>
         </DialogHeader>
         <form
-          className="grid gap-3"
+          className="grid min-w-0 gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -833,11 +903,7 @@ function SourcePromptDialog({
               }}
             />
           )}
-          {error ? (
-            <p id="add-source-error" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AddErrorAlert id="add-source-error" message={error} /> : null}
           <DialogFooter className="mt-1">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { TorrentStatus } from "../../lib/deluge/types";
 import {
   cellTextOverflows,
+  contextLimitTorrents,
   overflowTooltipLabel,
   torrentRowClassName,
   torrentRowHighlightClassName,
@@ -196,5 +198,15 @@ assert.ok(
   emptyState.indexOf("<Inbox") < emptyState.indexOf("torrentSearchEmptyTitle"),
   "empty-state icon sits above the title"
 );
+
+const limitA = { name: "a" } as TorrentStatus;
+const limitB = { name: "b" } as TorrentStatus;
+const limitById = new Map([
+  ["a", limitA],
+  ["b", limitB],
+]);
+assert.deepEqual(contextLimitTorrents("b", limitB, new Set(["a"]), limitById), [limitB]);
+assert.deepEqual(contextLimitTorrents("a", limitA, new Set(["a", "b"]), limitById), [limitA, limitB]);
+assert.deepEqual(contextLimitTorrents("a", limitA, new Set(["a", "missing"]), limitById), [limitA]);
 
 console.log("torrent-table cell truncation tests passed");

@@ -93,6 +93,7 @@ import {
   TORRENT_UPLOAD_SLOT_LIMIT_PRESETS,
   torrentAutoManagedLabel,
   torrentAutoManagedRadioValue,
+  torrentLimitCustomMarks,
   torrentLimitMenuCaps,
   torrentLimitRadioValue,
 } from "@/lib/deluge/torrent-limit-menu";
@@ -202,6 +203,22 @@ export function contextActionIds(selected: Set<string>, rowId: string): string[]
   return selected.has(rowId) ? [...selected] : [rowId];
 }
 
+/** Torrents the context menu will apply limit actions to. */
+export function contextLimitTorrents(
+  rowId: string,
+  row: TorrentStatus,
+  selected: Set<string>,
+  torrentById: ReadonlyMap<string, TorrentStatus>
+): TorrentStatus[] {
+  const ids = contextActionIds(selected, rowId);
+  const subjects: TorrentStatus[] = [];
+  for (const actionId of ids) {
+    const subject = actionId === rowId ? row : torrentById.get(actionId);
+    if (subject) subjects.push(subject);
+  }
+  return subjects.length > 0 ? subjects : [row];
+}
+
 export const TorrentTable = memo(function TorrentTable({
   torrents,
   selected,
@@ -234,6 +251,7 @@ export const TorrentTable = memo(function TorrentTable({
   const scrollRef = useRef<HTMLDivElement>(null);
   const rangeAnchorIdRef = useRef<string | null>(null);
   const ids = useMemo(() => torrents.map(([id]) => id), [torrents]);
+  const torrentById = useMemo(() => new Map(torrents), [torrents]);
   const headerSelect = visibleSelectionState(ids, selected);
   const colCount = shownColumns.length + 1;
 
@@ -630,6 +648,8 @@ export const TorrentTable = memo(function TorrentTable({
                 torrent={torrent}
                 striped={virtualRow.index % 2 === 1}
                 selected={selected.has(id)}
+                selectedIds={selected}
+                torrentById={torrentById}
                 selectedAbove={!!prevId && selected.has(prevId)}
                 selectedBelow={!!nextId && selected.has(nextId)}
                 shownColumns={shownColumns}
@@ -761,6 +781,8 @@ const TorrentRow = memo(function TorrentRow({
   torrent,
   striped,
   selected,
+  selectedIds,
+  torrentById,
   selectedAbove,
   selectedBelow,
   shownColumns,
@@ -774,6 +796,8 @@ const TorrentRow = memo(function TorrentRow({
   torrent: TorrentStatus;
   striped: boolean;
   selected: boolean;
+  selectedIds: Set<string>;
+  torrentById: ReadonlyMap<string, TorrentStatus>;
   selectedAbove: boolean;
   selectedBelow: boolean;
   shownColumns: TorrentColumn[];
@@ -785,6 +809,10 @@ const TorrentRow = memo(function TorrentRow({
 }) {
   const id = torrentId;
   const limitCaps = torrentLimitMenuCaps(clientKind);
+  const customLimits = torrentLimitCustomMarks(
+    contextLimitTorrents(id, torrent, selectedIds, torrentById),
+    limitCaps
+  );
   const applyOptions = (options: Record<string, unknown>) => {
     handlersRef.current.setOptions(options, handlersRef.current.selectForContext(id));
   };
@@ -900,7 +928,7 @@ const TorrentRow = memo(function TorrentRow({
           </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>
-          <ContextMenuSubTrigger>
+          <ContextMenuSubTrigger mark={customLimits.any ? <CustomLimitMark /> : undefined}>
             <Gauge /> Limits
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="min-w-44">
@@ -910,6 +938,7 @@ const TorrentRow = memo(function TorrentRow({
                 presets={TORRENT_SPEED_LIMIT_PRESETS_KIB}
                 unit="KiB/s"
                 current={torrent.max_download_speed}
+                custom={customLimits.downloadSpeed}
                 onSelect={(value) => applyOptions({ max_download_speed: value })}
               />
             ) : null}
@@ -919,6 +948,7 @@ const TorrentRow = memo(function TorrentRow({
                 presets={TORRENT_SPEED_LIMIT_PRESETS_KIB}
                 unit="KiB/s"
                 current={torrent.max_upload_speed}
+                custom={customLimits.uploadSpeed}
                 onSelect={(value) => applyOptions({ max_upload_speed: value })}
               />
             ) : null}
@@ -927,6 +957,7 @@ const TorrentRow = memo(function TorrentRow({
                 label="Connection Limit"
                 presets={TORRENT_CONNECTION_LIMIT_PRESETS}
                 current={torrent.max_connections}
+                custom={customLimits.connections}
                 onSelect={(value) => applyOptions({ max_connections: value })}
               />
             ) : null}
@@ -935,6 +966,7 @@ const TorrentRow = memo(function TorrentRow({
                 label="Upload Slot Limit"
                 presets={TORRENT_UPLOAD_SLOT_LIMIT_PRESETS}
                 current={torrent.max_upload_slots}
+                custom={customLimits.uploadSlots}
                 onSelect={(value) => applyOptions({ max_upload_slots: value })}
               />
             ) : null}
@@ -1014,22 +1046,33 @@ const TorrentRow = memo(function TorrentRow({
   );
 });
 
+function CustomLimitMark() {
+  return (
+    <>
+      <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Custom" aria-hidden />
+      <span className="sr-only">Custom</span>
+    </>
+  );
+}
+
 function LimitPresetSubmenu({
   label,
   presets,
   unit,
   current,
+  custom,
   onSelect,
 }: {
   label: string;
   presets: readonly number[];
   unit?: string;
   current: number;
+  custom: boolean;
   onSelect: (value: number) => void;
 }) {
   return (
     <ContextMenuSub>
-      <ContextMenuSubTrigger>{label}</ContextMenuSubTrigger>
+      <ContextMenuSubTrigger mark={custom ? <CustomLimitMark /> : undefined}>{label}</ContextMenuSubTrigger>
       <ContextMenuSubContent>
         <ContextMenuRadioGroup
           value={torrentLimitRadioValue(current, presets)}
