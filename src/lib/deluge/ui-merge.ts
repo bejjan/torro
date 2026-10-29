@@ -87,6 +87,21 @@ function statsEqual(a: SessionStats, b: SessionStats): boolean {
  * for unchanged torrents / stats so the table does not remount or rebuild rows.
  */
 export function mergeUiUpdate(prev: UiUpdate | null, next: UiUpdate): UiUpdate {
+  if (next.partial && prev?.torrents) {
+    const torrents = applyTorrentPatch(prev.torrents, next.torrents, next.removed);
+    const stats = mergeSessionStats(prev.stats, next.stats);
+    const filters = mergeFilters(prev.filters, next.filters);
+    if (
+      prev.connected === next.connected &&
+      torrents === prev.torrents &&
+      filters === prev.filters &&
+      stats === prev.stats
+    ) {
+      return prev;
+    }
+    return { connected: next.connected, torrents, filters, stats };
+  }
+
   // A newly connected session must not keep torrents from the previous daemon.
   const freshSession = !prev || (!prev.connected && next.connected);
   if (freshSession) {
@@ -108,6 +123,32 @@ export function mergeUiUpdate(prev: UiUpdate | null, next: UiUpdate): UiUpdate {
   }
 
   return { connected: next.connected, torrents, filters, stats };
+}
+
+function applyTorrentPatch(
+  prev: Record<string, TorrentStatus>,
+  changed: Record<string, TorrentStatus> | null,
+  removed: readonly string[] | undefined
+): Record<string, TorrentStatus> {
+  let changedAny = false;
+  const out: Record<string, TorrentStatus> = { ...prev };
+  for (const id of removed ?? []) {
+    if (id in out) {
+      delete out[id];
+      changedAny = true;
+    }
+  }
+  for (const [id, fields] of Object.entries(changed ?? {})) {
+    const base = out[id];
+    const merged = normalizeTorrentStatus({ ...(base ?? {}), ...fields });
+    if (base && torrentStatusEqual(base, merged)) {
+      out[id] = base;
+      continue;
+    }
+    out[id] = merged;
+    changedAny = true;
+  }
+  return changedAny ? out : prev;
 }
 
 /**

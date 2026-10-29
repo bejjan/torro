@@ -183,7 +183,11 @@ function unreachableMessage(status: number): string {
   return "Cannot reach Deluge Web. Check the URL and that deluge-web is running.";
 }
 
-export async function rpc<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
+export async function rpc<T = unknown>(
+  method: string,
+  params: unknown[] = [],
+  options?: { uiRevision?: number | null }
+): Promise<T> {
   const id = requestId++;
   if (method === "auth.login" && getStoredClientKind() === "transmission") {
     setSessionTransmissionPassword(typeof params[0] === "string" ? params[0] : "");
@@ -198,6 +202,7 @@ export async function rpc<T = unknown>(method: string, params: unknown[] = []): 
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(options?.uiRevision != null ? { "x-torro-ui-rev": String(options.uiRevision) } : {}),
       ...proxyHeaders(),
     },
     body: JSON.stringify({ method, params, id }),

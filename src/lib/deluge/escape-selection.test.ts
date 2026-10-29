@@ -121,7 +121,7 @@ assert.match(shellSource, /setActiveId\(null\)/);
 assert.match(shellSource, /data-torrent-search/);
 assert.match(shellSource, /setSearchExpanded\(true\)/);
 assert.match(shellSource, /focusVisibleTorrentSearch/);
-assert.match(shellSource, /setAddMenuOpen\(true\)/);
+assert.match(shellSource, /pickDefaultAddRef\.current\?\.\(\)/);
 assert.doesNotMatch(shellSource, /setAddOpen\(true\)/);
 assert.match(shellSource, /torrentSearchPlaceholder/);
 assert.match(shellSource, /addTorrentShortcutTitle/);

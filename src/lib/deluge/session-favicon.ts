@@ -1,14 +1,18 @@
 import { FILTER_DOWNLOADING } from "./sidebar-filters";
 
 export const SESSION_FAVICON_SIZE = 64;
-export const SESSION_FAVICON_LOGO_SRC = "/logo.png";
 export const STATIC_FAVICON_HREF = "/icon.png";
 export const SESSION_FAVICON_MIN_INTERVAL_MS = 250;
 export const SESSION_FAVICON_MARK = "data-session-progress-favicon";
 export const SESSION_FAVICON_RING_WIDTH = 7;
 export const SESSION_FAVICON_RING_INSET = 5;
-export const SESSION_FAVICON_RING_TRACK = "rgba(0,0,0,0.45)";
+/** Unfinished arc. Black at 12% opacity so the red plate shows through. */
+export const SESSION_FAVICON_RING_TRACK = "rgba(0,0,0,0.12)";
 export const SESSION_FAVICON_RING_PROGRESS = "#7eb6ff";
+/** Red plate from `public/logo.svg`, without the logo mark. */
+export const SESSION_FAVICON_BG = "#FF0020";
+/** Corner radius of the 64px logo plate. */
+export const SESSION_FAVICON_BG_RADIUS = 16;
 
 export type SessionFaviconTorrent = {
   state?: string;
@@ -58,8 +62,9 @@ export function shouldRedrawSessionFavicon({
 
 export type SessionFaviconContext = {
   clearRect(x: number, y: number, w: number, h: number): void;
-  drawImage(image: CanvasImageSource | unknown, dx: number, dy: number, dw: number, dh: number): void;
   beginPath(): void;
+  roundRect(x: number, y: number, w: number, h: number, radii?: number): void;
+  fill(): void;
   arc(
     x: number,
     y: number,
@@ -69,6 +74,7 @@ export type SessionFaviconContext = {
     counterclockwise?: boolean
   ): void;
   stroke(): void;
+  fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
   lineWidth: number;
   lineCap: CanvasLineCap | string;
@@ -88,16 +94,22 @@ export function sessionFaviconRingRadius(size: number): number {
   return size / 2 - SESSION_FAVICON_RING_WIDTH / 2 - SESSION_FAVICON_RING_INSET;
 }
 
+export function sessionFaviconCornerRadius(size: number): number {
+  return (size / SESSION_FAVICON_SIZE) * SESSION_FAVICON_BG_RADIUS;
+}
+
 export function drawSessionFavicon(
   canvas: SessionFaviconCanvas,
-  logo: unknown,
   progress: number | null
 ): boolean {
   const ctx = canvas.getContext("2d");
   if (!ctx) return false;
   const size = canvas.width;
   ctx.clearRect(0, 0, size, size);
-  ctx.drawImage(logo, 0, 0, size, size);
+  ctx.fillStyle = SESSION_FAVICON_BG;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, sessionFaviconCornerRadius(size));
+  ctx.fill();
   if (progress == null || !Number.isFinite(progress)) return true;
 
   const cx = size / 2;

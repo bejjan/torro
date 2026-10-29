@@ -112,6 +112,7 @@ export function AddTorrentDialog({
   onOpenChange,
   sourceMenuOpen: sourceMenuOpenProp,
   onSourceMenuOpenChange,
+  pickDefaultAddRef,
   defaultPath,
   label = DEFAULT_ADD_TORRENT_LABEL,
   onAdded,
@@ -120,6 +121,8 @@ export function AddTorrentDialog({
   onOpenChange: (open: boolean) => void;
   sourceMenuOpen?: boolean;
   onSourceMenuOpenChange?: (open: boolean) => void;
+  /** Called from the add shortcut so the file picker stays inside the key gesture. */
+  pickDefaultAddRef?: RefObject<(() => void) | null>;
   defaultPath: string;
   label?: string;
   onAdded?: () => void;
@@ -148,6 +151,12 @@ export function AddTorrentDialog({
     if (sourceMenuOpenProp === undefined) setUncontrolledSourceMenuOpen(next);
     onSourceMenuOpenChange?.(next);
   }
+
+  function pickDefaultAdd() {
+    fileInputRef.current?.click();
+  }
+
+  if (pickDefaultAddRef) pickDefaultAddRef.current = pickDefaultAdd;
 
   function revealPanel() {
     setSourceMenuOpen(false);
@@ -672,28 +681,39 @@ export function AddTorrentDialog({
       </PopoverContent>
     </Popover>
     ) : (
-    <DropdownMenu open={sourceMenuOpen} onOpenChange={setSourceMenuOpen}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            className={ADD_TOOLBAR_TRIGGER_CLASS}
-            title={label}
-            aria-label={label}
-          />
-        }
+    <div className="inline-flex items-center">
+      <Button
+        type="button"
+        className={cn(ADD_TOOLBAR_TRIGGER_CLASS, "rounded-r-none")}
+        title={label}
+        aria-label={label}
+        onClick={pickDefaultAdd}
       >
         <Plus />
         <span className="hidden xl:inline">{label}</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-48">
-        <AddSourceMenuItems
-          onPickFiles={() => fileInputRef.current?.click()}
-          onPickMagnet={() => setSourcePrompt("magnet")}
-          onPickUrl={() => setSourcePrompt("url")}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </Button>
+      <DropdownMenu open={sourceMenuOpen} onOpenChange={setSourceMenuOpen}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              className="h-8 rounded-l-none border-l border-primary-foreground/25 px-1.5"
+              aria-label="More ways to add a torrent"
+              title="Magnet or URL"
+            />
+          }
+        >
+          <ChevronDown />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          <AddSourceMenuItems
+            onPickFiles={pickDefaultAdd}
+            onPickMagnet={() => setSourcePrompt("magnet")}
+            onPickUrl={() => setSourcePrompt("url")}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
     )}
     <SourcePromptDialog
       kind={sourcePrompt}

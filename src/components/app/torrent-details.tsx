@@ -41,6 +41,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { rpc } from "@/lib/deluge/client";
+import { OPTIONS_KEYS, STATUS_KEYS } from "@/lib/deluge/keys";
 import {
   formatBytes,
   formatDate,
@@ -61,6 +62,10 @@ import { cn } from "@/lib/utils";
 
 const QUICK_INSPECT_TAB_CLASS =
   "h-7 flex-none rounded-lg border-0 bg-transparent px-2.5 text-[13px] font-normal text-muted-foreground shadow-none after:hidden hover:bg-muted/50 hover:text-muted-foreground data-active:border-transparent data-active:bg-muted data-active:font-normal data-active:text-foreground data-active:shadow-none data-active:hover:bg-muted data-active:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-none dark:hover:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-muted dark:data-active:hover:text-foreground";
+
+const DETAILS_STATUS_POLL_MS = 5000;
+const DETAILS_PEERS_POLL_MS = 4000;
+const DETAILS_EXTRA_POLL_MS = 8000;
 
 export function TorrentDetails({
   torrentId,
@@ -92,11 +97,18 @@ export function TorrentDetails({
   const [detail, setDetail] = useState<TorrentStatus | null>(torrent);
   const loadGen = useRef(0);
   const detailTorrentId = useRef<string | null>(torrentId);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
 
   useEffect(() => {
     const sameTorrent = detailTorrentId.current === torrentId && torrentId != null;
     detailTorrentId.current = torrentId;
     setDetail((prev) => overlayTorrentStatus(prev, torrent, sameTorrent));
+    if (!sameTorrent) {
+      setFiles(null);
+      setPeers([]);
+      setTrackers([]);
+    }
   }, [torrent, torrentId]);
 
   const loadDetails = useCallback(async () => {
@@ -107,19 +119,48 @@ export function TorrentDetails({
       return;
     }
     const gen = ++loadGen.current;
+    const currentTab = tabRef.current;
     try {
-      const [tree, status] = await Promise.all([
-        rpc<FileNode>("web.get_torrent_files", [torrentId]),
-        rpc<TorrentStatus & { peers?: TorrentPeer[]; trackers?: TorrentTracker[] }>(
-          "web.get_torrent_status",
-          [torrentId, []]
-        ),
-      ]);
-      if (gen !== loadGen.current) return;
-      setFiles(tree);
-      setPeers(status.peers || []);
-      setTrackers(status.trackers || []);
-      setDetail(normalizeTorrentStatus(status));
+      const jobs: Promise<void>[] = [];
+      jobs.push(
+        rpc<TorrentStatus>("web.get_torrent_status", [
+          torrentId,
+          [...STATUS_KEYS, ...OPTIONS_KEYS],
+        ]).then((status) => {
+          if (gen !== loadGen.current) return;
+          setDetail(normalizeTorrentStatus(status));
+        })
+      );
+      if (currentTab === "files") {
+        jobs.push(
+          rpc<FileNode>("web.get_torrent_files", [torrentId]).then((tree) => {
+            if (gen !== loadGen.current) return;
+            setFiles(tree);
+          })
+        );
+      }
+      if (currentTab === "peers") {
+        jobs.push(
+          rpc<{ peers?: TorrentPeer[] }>("web.get_torrent_status", [torrentId, ["peers"]]).then(
+            (status) => {
+              if (gen !== loadGen.current) return;
+              setPeers(status.peers || []);
+            }
+          )
+        );
+      }
+      if (currentTab === "trackers") {
+        jobs.push(
+          rpc<{ trackers?: TorrentTracker[] }>("web.get_torrent_status", [
+            torrentId,
+            ["trackers"],
+          ]).then((status) => {
+            if (gen !== loadGen.current) return;
+            setTrackers(status.trackers || []);
+          })
+        );
+      }
+      await Promise.all(jobs);
     } catch {
       /* polling shell still has grid fields */
     }
@@ -127,12 +168,18 @@ export function TorrentDetails({
 
   useEffect(() => {
     void loadDetails();
-    const id = setInterval(() => void loadDetails(), 2000);
+    const interval =
+      tab === "peers"
+        ? DETAILS_PEERS_POLL_MS
+        : tab === "files" || tab === "trackers"
+          ? DETAILS_EXTRA_POLL_MS
+          : DETAILS_STATUS_POLL_MS;
+    const id = setInterval(() => void loadDetails(), interval);
     return () => {
       loadGen.current += 1;
       clearInterval(id);
     };
-  }, [loadDetails]);
+  }, [loadDetails, tab]);
 
   return (
     <Tabs
