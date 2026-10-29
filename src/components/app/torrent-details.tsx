@@ -96,6 +96,9 @@ export function TorrentDetails({
   const [trackers, setTrackers] = useState<TorrentTracker[]>([]);
   const [detail, setDetail] = useState<TorrentStatus | null>(torrent);
   const loadGen = useRef(0);
+  const filesSeq = useRef(0);
+  const filesInFlight = useRef<string | null>(null);
+  const [filesSettled, setFilesSettled] = useState(false);
   const detailTorrentId = useRef<string | null>(torrentId);
   const tabRef = useRef(tab);
   tabRef.current = tab;
@@ -105,15 +108,21 @@ export function TorrentDetails({
     detailTorrentId.current = torrentId;
     setDetail((prev) => overlayTorrentStatus(prev, torrent, sameTorrent));
     if (!sameTorrent) {
+      filesSeq.current += 1;
+      filesInFlight.current = null;
       setFiles(null);
+      setFilesSettled(false);
       setPeers([]);
       setTrackers([]);
     }
   }, [torrent, torrentId]);
 
-  const loadDetails = useCallback(async () => {
+  const loadDetails = useCallback(async (options?: { refreshFiles?: boolean }) => {
     if (!torrentId) {
+      filesSeq.current += 1;
+      filesInFlight.current = null;
       setFiles(null);
+      setFilesSettled(false);
       setPeers([]);
       setTrackers([]);
       return;
@@ -131,12 +140,23 @@ export function TorrentDetails({
           setDetail(normalizeTorrentStatus(status));
         })
       );
-      if (currentTab === "files") {
+      // A tree of thousands of files is a large JSON. A later poll must not
+      // discard that response, or the list stays empty until one finishes in time.
+      if (currentTab === "files" && (options?.refreshFiles || filesInFlight.current !== torrentId)) {
+        const seq = ++filesSeq.current;
+        filesInFlight.current = torrentId;
         jobs.push(
-          rpc<FileNode>("web.get_torrent_files", [torrentId]).then((tree) => {
-            if (gen !== loadGen.current) return;
-            setFiles(tree);
-          })
+          (async () => {
+            try {
+              const tree = await rpc<FileNode>("web.get_torrent_files", [torrentId]);
+              if (seq !== filesSeq.current || detailTorrentId.current !== torrentId) return;
+              setFiles(tree);
+            } finally {
+              if (seq !== filesSeq.current) return;
+              filesInFlight.current = null;
+              setFilesSettled(true);
+            }
+          })()
         );
       }
       if (currentTab === "peers") {
@@ -228,10 +248,10 @@ export function TorrentDetails({
                 node={files}
                 torrentId={torrentId}
                 name={detail.name}
-                onApplied={loadDetails}
+                onApplied={() => loadDetails({ refreshFiles: true })}
               />
             ) : (
-              <Muted>No files</Muted>
+              <Muted>{filesSettled ? "No files" : "Loading files…"}</Muted>
             )}
           </TabsContent>
           <TabsContent
