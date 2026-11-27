@@ -63,10 +63,17 @@ assert.match(selectedBottom, /rounded-b-md/);
 assert.doesNotMatch(stripedHighlight, /rounded-(?:l|r|tl|tr|bl|br)-md/);
 assert.doesNotMatch(stripedHighlight, /rounded-sm|rounded-full|rounded-\[/);
 
+// The scroller runs under the translucent sidebar; its content is inset by the sidebar width.
 assert.match(
   table,
-  /className="min-h-0 flex-1 overflow-auto outline-none focus:outline-none"/,
+  /className="min-h-0 flex-1 overflow-auto pl-\[var\(--torrent-list-inset,0px\)\] scroll-pl-\[var\(--torrent-list-inset,0px\)\] outline-none focus:outline-none"/,
 );
+assert.equal(
+  [...table.matchAll(/pl-\[var\(--torrent-list-inset,0px\)\]/g)].length,
+  3,
+  "list scroller (padding + scroll-padding) and loading skeleton share the sidebar inset"
+);
+assert.match(table, /p-8 pl-\[calc\(var\(--torrent-list-inset,0px\)_\+_2rem\)\]/);
 assert.match(table, /aria-label="Torrent list"/);
 assert.match(table, /tabIndex=\{0\}/);
 assert.match(table, /table-fixed/);

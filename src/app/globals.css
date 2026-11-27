@@ -81,6 +81,8 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
+  /* Translucent sidebar tint: composites to --sidebar over --background. */
+  --sidebar-glass: oklch(0.975 0 0 / 60%);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.546 0.215 262.88);
   --sidebar-primary-foreground: oklch(0.99 0.005 255);
@@ -122,6 +124,7 @@
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
+  --sidebar-glass: oklch(0.254 0 0 / 55%);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.623 0.185 258);
   --sidebar-primary-foreground: oklch(0.99 0.005 255);
@@ -166,6 +169,29 @@ mark.search-hit {
 .dark mark.search-hit {
   background-color: oklch(0.68 0.14 85 / 0.55);
   color: oklch(0.99 0.03 95);
+}
+
+/*
+ * Finder-style sidebar: the torrent list scrolls underneath it and shows through, blurred.
+ * --sidebar-glass keeps enough tint for sidebar text to read over bright or busy rows. Opaque
+ * where backdrop-filter is unavailable or the user asks for reduced transparency.
+ */
+.sidebar-glass {
+  background-color: var(--sidebar);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .sidebar-glass {
+    background-color: var(--sidebar-glass);
+    -webkit-backdrop-filter: blur(8px) saturate(1.8);
+    backdrop-filter: blur(8px) saturate(1.8);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar-glass {
+    background-color: var(--sidebar);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* Neutral gray resize chrome for sidebar, table columns, and the details panel. */
