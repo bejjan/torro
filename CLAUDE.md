@@ -28,7 +28,7 @@ Before starting the dev server, check whether one is already listening on 43123.
 
 - Tests are plain scripts using `node:assert/strict`, with no `describe`/`it`. Each file ends by logging `"... tests passed"`; a thrown assertion fails the file.
 - Many component tests read the component's source as text and assert on it with regexes. When you change a component, run its test: renaming or reformatting a pinned line breaks the test even if behaviour is unchanged. Update the assertion when the change is intended.
-- Demo mode needs no daemon: on the sign-in screen choose **Demo mode**, or sign in with a blank URL and password `deluge`.
+- Demo mode needs no daemon or password: on the sign-in screen click **Demo mode**, pick a client and a catalog (**Sample library**, or **Load test** for thousands of rows), then **Start demo**. Signing in with a blank URL does not work.
 
 ## Conventions
 
