@@ -7,6 +7,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   FolderInput,
+  ListOrdered,
   MoreHorizontal,
   PanelBottom,
   PanelRight,
@@ -32,14 +33,18 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { rpc } from "@/lib/deluge/client";
 import { OPTIONS_KEYS, STATUS_KEYS } from "@/lib/deluge/keys";
 import {
@@ -60,8 +65,14 @@ import { overlayTorrentStatus } from "@/lib/deluge/ui-merge";
 import type { FileNode, TorrentPeer, TorrentStatus, TorrentTracker } from "@/lib/deluge/types";
 import { cn } from "@/lib/utils";
 
-const QUICK_INSPECT_TAB_CLASS =
-  "h-7 flex-none rounded-lg border-0 bg-transparent px-2.5 text-[13px] font-normal text-muted-foreground shadow-none after:hidden hover:bg-muted/50 hover:text-muted-foreground data-active:border-transparent data-active:bg-muted data-active:font-normal data-active:text-foreground data-active:shadow-none data-active:hover:bg-muted data-active:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-none dark:hover:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-muted dark:data-active:hover:text-foreground";
+// Underlined tabs: the marker sits on the divider above the tab content, so the
+// strip reads as "views of what is below" rather than as a menu bar. State
+// changes are instant (no hover or selection fade).
+const INSPECTOR_TAB_CLASS =
+  "h-full flex-none rounded-none border-0 px-0.5 text-[13px] text-muted-foreground transition-none after:transition-none hover:text-foreground focus-visible:ring-inset data-active:text-foreground group-data-horizontal/tabs:after:bottom-0";
+
+// Header buttons change state instantly too.
+const INSPECTOR_BUTTON_CLASS = "transition-none";
 
 const DETAILS_STATUS_POLL_MS = 5000;
 const DETAILS_PEERS_POLL_MS = 4000;
@@ -211,7 +222,19 @@ export function TorrentDetails({
       className={cn("@container flex h-full min-h-0 min-w-0 flex-col gap-0", className)}
     >
       {variant === "dialog" ? (
-        <InspectorStatusBar name={detail?.name || "Inspector"} onClose={onClose} />
+        <InspectorStatusBar
+          name={detail?.name || "Inspector"}
+          onClose={onClose}
+          actions={
+            <InspectorActions
+              torrentId={torrentId}
+              paused={torrentIsPaused(detail?.state)}
+              onAct={onAct}
+              onRemove={onRemove}
+              onMove={onMove}
+            />
+          }
+        />
       ) : (
         <DetailsHeader
           name={detail?.name || "Details"}
@@ -220,19 +243,7 @@ export function TorrentDetails({
           onClose={onClose}
         />
       )}
-      <InspectorTabs
-        actions={
-          variant === "dialog" ? (
-            <InspectorActionBar
-              torrentId={torrentId}
-              paused={torrentIsPaused(detail?.state)}
-              onAct={onAct}
-              onRemove={onRemove}
-              onMove={onMove}
-            />
-          ) : undefined
-        }
-      />
+      <InspectorTabs dense={variant !== "dialog"} />
       {torrentId && detail ? (
         <>
           <TabsContent
@@ -294,20 +305,42 @@ export function TorrentDetails({
   );
 }
 
-function InspectorStatusBar({ name, onClose }: { name: string; onClose?: () => void }) {
+function InspectorStatusBar({
+  name,
+  onClose,
+  actions,
+}: {
+  name: string;
+  onClose?: () => void;
+  actions?: ReactNode;
+}) {
+  // Narrow: the name and Close share the first row and the actions wrap below.
+  // From 36rem the actions sit beside the name, before Close.
   return (
-    <div className="flex min-w-0 items-center gap-2 overflow-hidden bg-background px-3 py-2">
-      <div className="min-w-0 flex-1 overflow-hidden">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden bg-background px-3 py-2">
+      <div className="order-1 min-w-0 flex-1 overflow-hidden">
         <div className="min-w-0 truncate text-sm font-medium" title={name}>
           {name}
         </div>
       </div>
+      {actions ? (
+        <div className="order-3 flex min-w-0 basis-full items-center gap-1 @min-[36rem]:order-2 @min-[36rem]:basis-auto">
+          {actions}
+          <Separator
+            orientation="vertical"
+            className="ml-1 hidden h-4 data-vertical:self-center @min-[36rem]:block"
+          />
+        </div>
+      ) : null}
       {onClose ? (
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label="Close inspector"
-          className="shrink-0 text-muted-foreground"
+          className={cn(
+            "order-2 shrink-0 text-muted-foreground @min-[36rem]:order-3",
+            INSPECTOR_BUTTON_CLASS
+          )}
           onClick={onClose}
         >
           <X />
@@ -439,38 +472,38 @@ function DetailsDockControl({
   );
 }
 
-function InspectorTabs({ actions }: { actions?: ReactNode }) {
+function InspectorTabs({ dense }: { dense?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col border-b bg-background @min-[36rem]:flex-row @min-[36rem]:items-center @min-[36rem]:gap-2 @min-[36rem]:pl-1.5 @min-[36rem]:pr-3">
-      <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1.5 @min-[36rem]:px-0">
-        <TabsList className="h-8 w-max items-center justify-start gap-0.5 rounded-none bg-transparent p-0">
-          <TabsTrigger value="status" className={QUICK_INSPECT_TAB_CLASS}>
-            Status
-          </TabsTrigger>
-          <TabsTrigger value="files" className={QUICK_INSPECT_TAB_CLASS}>
-            Files
-          </TabsTrigger>
-          <TabsTrigger value="peers" className={QUICK_INSPECT_TAB_CLASS}>
-            Peers
-          </TabsTrigger>
-          <TabsTrigger value="options" className={QUICK_INSPECT_TAB_CLASS}>
-            Options
-          </TabsTrigger>
-          <TabsTrigger value="trackers" className={QUICK_INSPECT_TAB_CLASS}>
-            Trackers
-          </TabsTrigger>
-        </TabsList>
-      </div>
-      {actions ? (
-        <div className="flex shrink-0 items-center gap-px overflow-x-auto overscroll-x-contain border-t px-2 py-1 @min-[36rem]:border-t-0 @min-[36rem]:px-0 @min-[36rem]:py-0">
-          {actions}
-        </div>
-      ) : null}
+    <div
+      className={cn(
+        "min-w-0 overflow-x-auto overscroll-x-contain border-b bg-background",
+        dense ? "px-2" : "px-3"
+      )}
+    >
+      <TabsList variant="line" className="h-8 w-max justify-start gap-4 p-0">
+        <TabsTrigger value="status" className={INSPECTOR_TAB_CLASS}>
+          Status
+        </TabsTrigger>
+        <TabsTrigger value="files" className={INSPECTOR_TAB_CLASS}>
+          Files
+        </TabsTrigger>
+        <TabsTrigger value="peers" className={INSPECTOR_TAB_CLASS}>
+          Peers
+        </TabsTrigger>
+        <TabsTrigger value="options" className={INSPECTOR_TAB_CLASS}>
+          Options
+        </TabsTrigger>
+        <TabsTrigger value="trackers" className={INSPECTOR_TAB_CLASS}>
+          Trackers
+        </TabsTrigger>
+      </TabsList>
     </div>
   );
 }
 
-function InspectorActionBar({
+// Pause/Resume is the one labelled action; the rest sit behind "More actions",
+// in the same order and with the same icons as the torrent row context menu.
+function InspectorActions({
   torrentId,
   paused,
   onAct,
@@ -489,110 +522,75 @@ function InspectorActionBar({
   return (
     <>
       {paused ? (
-        <InspectorAction
-          label="Resume"
+        <Button
+          variant="outline"
+          size="sm"
           disabled={disabled}
+          className={INSPECTOR_BUTTON_CLASS}
           onClick={() => onAct?.("core.resume_torrent", ids)}
         >
-          <Play />
-        </InspectorAction>
+          <Play data-icon="inline-start" />
+          Resume
+        </Button>
       ) : (
-        <InspectorAction
-          label="Pause"
+        <Button
+          variant="outline"
+          size="sm"
           disabled={disabled}
+          className={INSPECTOR_BUTTON_CLASS}
           onClick={() => onAct?.("core.pause_torrent", ids)}
         >
-          <Pause />
-        </InspectorAction>
+          <Pause data-icon="inline-start" />
+          Pause
+        </Button>
       )}
-      <Separator orientation="vertical" className="mx-1 h-4" />
-      <InspectorAction
-        label="Queue top"
-        disabled={disabled}
-        onClick={() => onAct?.("core.queue_top", ids)}
-      >
-        <ChevronsUp />
-      </InspectorAction>
-      <InspectorAction
-        label="Queue up"
-        disabled={disabled}
-        onClick={() => onAct?.("core.queue_up", ids)}
-      >
-        <ArrowUp />
-      </InspectorAction>
-      <InspectorAction
-        label="Queue down"
-        disabled={disabled}
-        onClick={() => onAct?.("core.queue_down", ids)}
-      >
-        <ArrowDown />
-      </InspectorAction>
-      <InspectorAction
-        label="Queue bottom"
-        disabled={disabled}
-        onClick={() => onAct?.("core.queue_bottom", ids)}
-      >
-        <ChevronsDown />
-      </InspectorAction>
-      <Separator orientation="vertical" className="mx-1 h-4" />
-      <InspectorAction
-        label="Move storage"
-        disabled={disabled}
-        onClick={() => onMove?.(ids)}
-      >
-        <FolderInput />
-      </InspectorAction>
-      <InspectorAction
-        label="Force recheck"
-        disabled={disabled}
-        onClick={() => onAct?.("core.force_recheck", ids)}
-      >
-        <RefreshCw />
-      </InspectorAction>
-      <Separator orientation="vertical" className="mx-1 h-4" />
-      <InspectorAction
-        label="Remove"
-        variant="destructive"
-        disabled={disabled}
-        onClick={() => onRemove?.(ids)}
-      >
-        <Trash2 />
-      </InspectorAction>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="More actions"
+              disabled={disabled}
+              className={cn("text-muted-foreground", INSPECTOR_BUTTON_CLASS)}
+            />
+          }
+        >
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <ListOrdered /> Queue
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => onAct?.("core.queue_top", ids)}>
+                <ChevronsUp /> Top
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAct?.("core.queue_up", ids)}>
+                <ArrowUp /> Up
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAct?.("core.queue_down", ids)}>
+                <ArrowDown /> Down
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAct?.("core.queue_bottom", ids)}>
+                <ChevronsDown /> Bottom
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem onClick={() => onMove?.(ids)}>
+            <FolderInput /> Move storage…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAct?.("core.force_recheck", ids)}>
+            <RefreshCw /> Force recheck
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => onRemove?.(ids)}>
+            <Trash2 /> Remove...
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
-  );
-}
-
-function InspectorAction({
-  label,
-  variant = "ghost",
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  variant?: "ghost" | "destructive";
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant={variant}
-            size="icon-xs"
-            aria-label={label}
-            disabled={disabled}
-            className={variant === "destructive" ? undefined : "text-muted-foreground"}
-            onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 

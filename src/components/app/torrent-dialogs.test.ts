@@ -72,8 +72,8 @@ assert.doesNotMatch(addSource, /setTab\(/);
 assert.doesNotMatch(addSource, /useState<AddTab>/);
 assert.doesNotMatch(addSource, /Choose torrent files/);
 assert.doesNotMatch(addSource, /chooseFileRef/);
-assert.match(details, /QUICK_INSPECT_TAB_CLASS/);
-assert.match(details, /h-7 flex-none rounded-lg border-0/);
+assert.match(details, /INSPECTOR_TAB_CLASS/);
+assert.match(details, /h-full flex-none rounded-none border-0/);
 
 assert.match(addDialog, /<Plus \/>/);
 assert.match(addDialog, /hidden xl:inline/);

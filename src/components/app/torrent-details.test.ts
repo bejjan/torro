@@ -15,7 +15,7 @@ assert.doesNotMatch(details, /function FileTree/);
 
 assert.match(details, /InspectorStatusBar/);
 assert.match(details, /aria-label="Close inspector"/);
-assert.match(details, /aria-label=\{label\}/);
+assert.match(details, /aria-label="More actions"/);
 assert.match(details, /paused=\{torrentIsPaused\(detail\?\.state\)\}/);
 assert.match(details, /currentTab === "files"/);
 assert.match(details, /filesInFlight\.current !== torrentId/);
@@ -29,28 +29,38 @@ assert.match(details, /core\.pause_torrent/);
 assert.match(details, /core\.resume_torrent/);
 assert.match(details, /core\.queue_top/);
 assert.match(details, /core\.force_recheck/);
-assert.match(details, /label="Remove"/);
-assert.match(details, /label="Move storage"/);
-assert.match(details, /label="Force recheck"/);
-assert.match(details, /variant="destructive"/);
-assert.ok(
-  details.indexOf('label="Force recheck"') < details.indexOf('label="Remove"'),
-  "inspector Remove sits last after Force recheck"
-);
+// The header carries one labelled Pause/Resume button; everything else is in
+// the "More actions" menu, in the row context menu's order, Remove last.
 {
-  const bar = details.slice(
-    details.indexOf("function InspectorActionBar"),
-    details.indexOf("function InspectorAction({")
-  );
+  const start = details.indexOf("function InspectorActions");
+  const end = details.indexOf("\nfunction ", start + 1);
+  const actions = details.slice(start, end);
+  assert.match(actions, /<Pause data-icon="inline-start" \/>\s+Pause/);
+  assert.match(actions, /<Play data-icon="inline-start" \/>\s+Resume/);
+  assert.match(actions, /<DropdownMenuSubTrigger>\s+<ListOrdered \/> Queue/);
+  assert.match(actions, /<FolderInput \/> Move storage…/);
+  assert.match(actions, /<RefreshCw \/> Force recheck/);
+  assert.match(actions, /<DropdownMenuItem variant="destructive" onClick=\{\(\) => onRemove\?\.\(ids\)\}>\s+<Trash2 \/> Remove\.\.\./);
+  const order = [
+    "core.queue_top",
+    "core.queue_up",
+    "core.queue_down",
+    "core.queue_bottom",
+    "onMove?.(ids)",
+    "core.force_recheck",
+    "<DropdownMenuSeparator />",
+    "onRemove?.(ids)",
+  ].map((needle) => actions.indexOf(needle));
   assert.ok(
-    bar.lastIndexOf('label="Remove"') > bar.lastIndexOf('label="Force recheck"'),
-    "Remove is the last inspector toolbar action"
+    order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])),
+    "menu follows the row context menu order and Remove is last"
   );
-  assert.match(bar, /variant="destructive"/);
+  assert.doesNotMatch(actions, /Tooltip/);
 }
 assert.match(details, /function InspectorTabs/);
-assert.match(details, /function InspectorActionBar/);
-assert.match(details, /<InspectorTabs/);
+assert.match(details, /function InspectorActions/);
+assert.doesNotMatch(details, /function InspectorActionBar/);
+assert.match(details, /<InspectorTabs dense=\{variant !== "dialog"\} \/>/);
 assert.match(details, /actions=\{/);
 assert.doesNotMatch(details, /function InspectorTab\b/);
 assert.doesNotMatch(details, /<Activity \/>/);
@@ -64,27 +74,43 @@ assert.match(details, /bg-background/);
 assert.match(details, /size="icon-xs"/);
 assert.match(details, /size="icon-sm"/);
 assert.doesNotMatch(details, /size="icon"(?!-)/);
-assert.match(details, /TooltipContent/);
+assert.doesNotMatch(details, /TooltipContent/);
 assert.match(details, /variant === "dialog" \? "p-4" : "p-3"/);
-assert.ok(
-  details.indexOf("title={name}") < details.indexOf('label="Pause"'),
-  "inspector title sits above the tab-row actions"
-);
 {
+  // The actions sit in the title row of the dialog; the tab strip holds tabs only.
   const start = details.indexOf("function InspectorStatusBar");
   const end = details.indexOf("\nfunction ", start + 1);
   const headerFn = details.slice(start, end);
   assert.doesNotMatch(headerFn, /StateBadge/);
-  assert.doesNotMatch(headerFn, /label="Pause"/);
   assert.doesNotMatch(headerFn, /bg-muted\/50/);
   assert.match(headerFn, /bg-background/);
+  assert.match(headerFn, /title=\{name\}/);
+  assert.match(headerFn, /\{actions\}/);
+  assert.ok(
+    headerFn.indexOf("title={name}") < headerFn.indexOf("{actions}") &&
+      headerFn.indexOf("{actions}") < headerFn.indexOf('aria-label="Close inspector"'),
+    "title, then actions, then Close"
+  );
+  // Narrow containers wrap the actions under the name.
+  assert.match(headerFn, /order-3 flex min-w-0 basis-full/);
+  assert.match(headerFn, /@min-\[36rem\]:order-2 @min-\[36rem\]:basis-auto/);
 }
 {
-  const start = details.indexOf("function InspectorAction({");
+  const start = details.indexOf("function InspectorTabs");
   const end = details.indexOf("\nfunction ", start + 1);
-  const actionFn = details.slice(start, end);
-  assert.doesNotMatch(actionFn, /flex-col/);
-  assert.match(actionFn, /size="icon-xs"/);
+  const tabsFn = details.slice(start, end);
+  assert.doesNotMatch(tabsFn, /\{actions\}/);
+  assert.doesNotMatch(tabsFn, /<Button/);
+  assert.match(tabsFn, /<TabsList variant="line" className="h-8 w-max justify-start gap-4 p-0">/);
+  assert.match(tabsFn, /overflow-x-auto overscroll-x-contain border-b bg-background/);
+  assert.match(tabsFn, /dense \? "px-2" : "px-3"/);
+}
+// Only the dialog gets actions; the docked pane relies on the toolbar and row menu.
+assert.match(details, /variant === "dialog" \? \(\s+<InspectorStatusBar[\s\S]*?<InspectorActions/);
+{
+  const start = details.indexOf("function DetailsHeader");
+  const end = details.indexOf("\nfunction ", start + 1);
+  assert.doesNotMatch(details.slice(start, end), /InspectorActions/);
 }
 assert.match(details, /DetailsHeader/);
 assert.match(details, /DetailsDockControl/);
@@ -109,33 +135,34 @@ assert.match(details, /TabsTrigger value="files"/);
 assert.match(details, /TabsTrigger value="peers"/);
 assert.match(details, /TabsTrigger value="options"/);
 assert.match(details, /TabsTrigger value="trackers"/);
-assert.match(details, /QUICK_INSPECT_TAB_CLASS/);
-assert.match(details, /rounded-lg border-0/);
-assert.match(details, /text-\[13px\] font-normal text-muted-foreground/);
-assert.match(details, /after:hidden/);
-assert.match(details, /hover:bg-muted\/50 hover:text-muted-foreground/);
-assert.match(details, /data-active:bg-muted data-active:font-normal/);
-assert.match(details, /data-active:hover:bg-muted data-active:hover:text-foreground/);
-assert.match(details, /group-data-\[variant=default\]\/tabs-list:data-active:shadow-none/);
-assert.match(details, /h-8 w-max items-center justify-start gap-0\.5 rounded-none/);
+// Underlined tabs with instant state changes (no hover or selection fade).
+assert.match(details, /INSPECTOR_TAB_CLASS/);
+assert.doesNotMatch(details, /QUICK_INSPECT_TAB_CLASS/);
+{
+  const tabClass = details.match(/const INSPECTOR_TAB_CLASS =\s+"([^"]+)"/)?.[1] ?? "";
+  assert.match(tabClass, /rounded-none border-0/);
+  assert.match(tabClass, /text-\[13px\] text-muted-foreground/);
+  assert.match(tabClass, /transition-none after:transition-none/);
+  assert.match(tabClass, /hover:text-foreground/);
+  assert.match(tabClass, /data-active:text-foreground/);
+  assert.match(tabClass, /group-data-horizontal\/tabs:after:bottom-0/);
+  assert.doesNotMatch(tabClass, /after:hidden/);
+  assert.doesNotMatch(tabClass, /bg-muted/);
+}
+assert.match(details, /const INSPECTOR_BUTTON_CLASS = "transition-none"/);
 assert.doesNotMatch(details, /hover:text-foreground\/80/);
 assert.doesNotMatch(details, /justify-start gap-2 rounded-none/);
 assert.match(details, /overflow-hidden px-2 py-1/);
 assert.doesNotMatch(details, /overflow-hidden border-b px-2 py-1/);
 assert.doesNotMatch(details, /data-active:font-semibold/);
 assert.doesNotMatch(details, /data-active:border-border/);
-assert.doesNotMatch(details, /variant="line"/);
 assert.doesNotMatch(details, /after:h-0\.5 after:bg-foreground/);
 assert.doesNotMatch(details, /min-w-full justify-start/);
 assert.doesNotMatch(details, /overflow-x-auto border-b px-2 pt-1/);
 assert.match(details, /@container flex h-full min-h-0 min-w-0/);
-assert.match(details, /flex min-w-0 flex-col border-b bg-background/);
-assert.match(details, /@min-\[36rem\]:flex-row @min-\[36rem\]:items-center/);
-assert.match(details, /@min-\[36rem\]:pl-1\.5 @min-\[36rem\]:pr-3/);
 assert.doesNotMatch(details, /border-b bg-background px-3/);
 assert.doesNotMatch(details, /flex min-w-0 items-center gap-2 border-b bg-background pl-1\.5 pr-3/);
 assert.match(details, /overflow-x-auto overscroll-x-contain/);
-assert.match(details, /border-t px-2 py-1 @min-\[36rem\]:border-t-0/);
 assert.doesNotMatch(details, /@min-\[480px\]:grid-cols-2/);
 assert.doesNotMatch(details, /items-baseline justify-between/);
 assert.doesNotMatch(details, /min-w-0 text-right tabular/);
