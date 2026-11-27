@@ -49,7 +49,7 @@ Deluge and Transmission settings in one dialog, opened from the menu.
 
 ## Demo mode
 
-On the connection screen, pick the client type, leave the URL blank, and sign in with password `deluge`.
+On the connection screen, click **Demo mode**, pick the client type, keep **Sample library** selected, and click **Start demo**. No URL or password is needed.
 
 - **Deluge** demo mocks `deluge-web` JSON-RPC.
 - **Transmission** demo mocks Transmission RPC 16+ (including labels).
@@ -57,9 +57,9 @@ On the connection screen, pick the client type, leave the URL blank, and sign in
 
 Demo mode keeps an in-memory session (survives Next.js hot reload) and simulates live download progress.
 
-## Load test / admin dummy data
+## Load test
 
-On the connection screen, expand **Admin: synthetic session** at the bottom of the form. Turn on **Use dummy data**, pick Deluge, Transmission, or qBittorrent, and set **torrent count** (default 2000, max 10 000). URL can stay blank; password can be `deluge` or anything else — no daemon is contacted.
+On the connection screen, click **Demo mode**, pick Deluge, Transmission, or qBittorrent, and choose **Load test** instead of **Sample library**. Set **Torrent count** (default 2000, max 10 000), and optionally the **RNG seed** and the share of torrents that are seeding, downloading, or paused; the remainder become checking, queued, and error. Click **Start demo**. No daemon is contacted.
 
 This builds a separate in-memory catalog (stable if you keep the RNG seed) so the real table, sidebar filters, details pane, and polling run against thousands of torrents. 10 000 rows will be slow. Settings persist in `localStorage` under `nova:admin-demo`.
 
