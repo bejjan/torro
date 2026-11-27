@@ -93,7 +93,7 @@ export function TorrentDetails({
   const [tab, setTab] = useState("status");
   const [files, setFiles] = useState<FileNode | null>(null);
   const [peers, setPeers] = useState<TorrentPeer[]>([]);
-  const [trackers, setTrackers] = useState<TorrentTracker[]>([]);
+  const [trackers, setTrackers] = useState<TorrentTracker[] | null>(null);
   const [detail, setDetail] = useState<TorrentStatus | null>(torrent);
   const loadGen = useRef(0);
   const filesSeq = useRef(0);
@@ -116,7 +116,7 @@ export function TorrentDetails({
       setFiles(null);
       setFilesSettled(false);
       setPeers([]);
-      setTrackers([]);
+      setTrackers(null);
     }
   }, [torrent, torrentId]);
 
@@ -127,7 +127,7 @@ export function TorrentDetails({
       setFiles(null);
       setFilesSettled(false);
       setPeers([]);
-      setTrackers([]);
+      setTrackers(null);
       return;
     }
     const gen = ++loadGen.current;
@@ -802,17 +802,36 @@ function TrackersForm({
   onChange,
 }: {
   torrentId: string;
-  trackers: TorrentTracker[];
+  /** `null` until the daemon's list has loaded for this torrent. */
+  trackers: TorrentTracker[] | null;
   onChange: (t: TorrentTracker[]) => void;
 }) {
   const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  async function save(next: TorrentTracker[]) {
+  // `set_torrent_trackers` replaces the whole list, so build it from what the daemon has now,
+  // never from local state that may be empty or stale.
+  async function addTracker(newUrl: string) {
+    setBusy(true);
     try {
+      const status = await rpc<{ trackers?: TorrentTracker[] }>("web.get_torrent_status", [
+        torrentId,
+        ["trackers"],
+      ]);
+      const current = status.trackers ?? [];
+      if (current.some((t) => t.url === newUrl)) {
+        onChange(current);
+        setUrl("");
+        return;
+      }
+      const next = [...current, { url: newUrl, tier: 0 }];
       await rpc("core.set_torrent_trackers", [torrentId, next]);
       onChange(next);
+      setUrl("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Tracker update failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -831,7 +850,14 @@ function TrackersForm({
             </tr>
           </thead>
           <tbody>
-            {trackers.map((t) => (
+            {trackers == null ? (
+              <tr className="border-t">
+                <td colSpan={2} className="py-1 text-xs text-muted-foreground">
+                  Loading trackers…
+                </td>
+              </tr>
+            ) : null}
+            {(trackers ?? []).map((t) => (
               <tr key={t.url} className="border-t">
                 <td className="min-w-0 truncate py-1 pr-2 font-mono text-xs" title={t.url}>
                   {t.url}
@@ -852,10 +878,11 @@ function TrackersForm({
         <Button
           variant="outline"
           className="shrink-0 @min-[400px]:self-auto"
+          disabled={trackers == null || busy || !url.trim()}
           onClick={() => {
-            if (!url.trim()) return;
-            void save([...trackers, { url: url.trim(), tier: 0 }]);
-            setUrl("");
+            const next = url.trim();
+            if (!next) return;
+            void addTracker(next);
           }}
         >
           Add

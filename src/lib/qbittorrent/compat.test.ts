@@ -69,6 +69,29 @@ async function run() {
   );
   assert.deepEqual((plugins.result as { enabled_plugins: string[] }).enabled_plugins, ["Label"]);
 
+  // The options form sends `prioritize_first_last_pieces` (Deluge's set_torrent_options key).
+  const flTarget = Object.keys(result.torrents)[0];
+  const firstLast = async () =>
+    (
+      (
+        await handleQbittorrentCompat(
+          { method: "web.get_torrent_status", params: [flTarget, ["prioritize_first_last"]], id: 20 },
+          { demo: true, cookieHeader: cookie }
+        )
+      ).result as { prioritize_first_last: boolean }
+    ).prioritize_first_last;
+  const flBefore = await firstLast();
+  const flSet = await handleQbittorrentCompat(
+    {
+      method: "core.set_torrent_options",
+      params: [[flTarget], { prioritize_first_last_pieces: !flBefore }],
+      id: 21,
+    },
+    { demo: true, cookieHeader: cookie }
+  );
+  assert.equal(flSet.error, null);
+  assert.equal(await firstLast(), !flBefore);
+
   const raw = handleQbittorrentDemo({ method: "GET", path: "/app/version" });
   assert.ok(String(raw.data).includes("demo"));
 

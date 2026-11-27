@@ -466,13 +466,20 @@ export async function handleQbittorrentCompat(
             form: { hashes, value: Boolean(options.super_seeding) },
           });
         }
-        if ("sequential_download" in options || "prioritize_first_last" in options) {
+        // Deluge's set_torrent_options key is `prioritize_first_last_pieces`; the status field is
+        // `prioritize_first_last`. Accept either.
+        const flKey =
+          "prioritize_first_last_pieces" in options
+            ? "prioritize_first_last_pieces"
+            : "prioritize_first_last" in options
+              ? "prioritize_first_last"
+              : null;
+        if ("sequential_download" in options || flKey) {
           const torrents = await fetchTorrents(call);
           const selected = torrents.filter((t) => hashes.split("|").includes(torrentKey(t)));
           const seqWanted =
             "sequential_download" in options ? Boolean(options.sequential_download) : undefined;
-          const flWanted =
-            "prioritize_first_last" in options ? Boolean(options.prioritize_first_last) : undefined;
+          const flWanted = flKey ? Boolean(options[flKey]) : undefined;
           const seqHashes = selected
             .filter((t) => seqWanted != null && Boolean(t.seq_dl) !== seqWanted)
             .map((t) => t.hash);

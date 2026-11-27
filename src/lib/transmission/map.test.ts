@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mapTransmissionState, mapTransmissionTorrent, mapSessionStats, torrentKey, transmissionPriorityFromDeluge, delugePriorityFromTransmission, matchesTransmissionFilter, uniqueLabels } from "./map";
+import { mapTransmissionState, mapTransmissionTorrent, mapSessionStats, torrentKey, transmissionPriorityFromDeluge, delugePriorityFromTransmission, filePrioritiesToTransmissionArgs, trackerEditToTransmissionArgs, matchesTransmissionFilter, uniqueLabels } from "./map";
 import { TR_STATUS, type TransmissionTorrent } from "./types";
 import { normalizeTransmissionRpcUrl, DEFAULT_TRANSMISSION_PORT } from "./url";
 
@@ -66,11 +66,44 @@ const errored: TransmissionTorrent = {
 };
 assert.equal(mapTransmissionState(errored), "Error");
 
+// Transmission's file priority scale is -1 (low), 0 (normal), 1 (high).
 assert.deepEqual(transmissionPriorityFromDeluge(0), { wanted: false, priority: 0 });
-assert.deepEqual(transmissionPriorityFromDeluge(4), { wanted: true, priority: 1 });
-assert.deepEqual(transmissionPriorityFromDeluge(7), { wanted: true, priority: 2 });
-assert.equal(delugePriorityFromTransmission(1, true), 4);
+assert.deepEqual(transmissionPriorityFromDeluge(1), { wanted: true, priority: -1 });
+assert.deepEqual(transmissionPriorityFromDeluge(4), { wanted: true, priority: 0 });
+assert.deepEqual(transmissionPriorityFromDeluge(7), { wanted: true, priority: 1 });
+assert.equal(delugePriorityFromTransmission(-1, true), 1);
+assert.equal(delugePriorityFromTransmission(0, true), 4);
+assert.equal(delugePriorityFromTransmission(1, true), 7);
 assert.equal(delugePriorityFromTransmission(0, false), 0);
+assert.deepEqual(filePrioritiesToTransmissionArgs([0, 1, 4, 7]), {
+  "files-wanted": [1, 2, 3],
+  "files-unwanted": [0],
+  "priority-low": [1],
+  "priority-normal": [2],
+  "priority-high": [3],
+});
+
+const currentTrackers = [
+  { announce: "udp://a.example:1337/announce", id: 4, tier: 0 },
+  { announce: "https://b.example/announce", id: 9, tier: 1 },
+];
+// trackerRemove takes ids; unchanged lists send nothing (libtransmission rejects no-op edits).
+assert.deepEqual(
+  trackerEditToTransmissionArgs(currentTrackers, ["udp://a.example:1337/announce", "https://b.example/announce"]),
+  {}
+);
+assert.deepEqual(
+  trackerEditToTransmissionArgs(currentTrackers, [
+    "udp://a.example:1337/announce",
+    "https://b.example/announce",
+    "udp://c.example:6969/announce",
+  ]),
+  { trackerAdd: ["udp://c.example:6969/announce"] }
+);
+assert.deepEqual(trackerEditToTransmissionArgs(currentTrackers, ["https://b.example/announce"]), {
+  trackerRemove: [4],
+});
+assert.throws(() => trackerEditToTransmissionArgs([{ announce: "udp://x/announce" }], []), /did not report an id/);
 
 assert.equal(
   matchesTransmissionFilter(downloading, { label: ["linux"] }),
