@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { FileKindIcon, FolderTreeIcon } from "@/components/app/file-tree-icons";
 import { NotifyTestButton } from "@/components/app/notify-test-button";
 import { FilePrioritySelect } from "@/components/app/file-priority-select";
+import { LocationInput } from "@/components/app/location-input";
 import { PREF_DIALOG_SPLIT_CLASS } from "@/components/app/pref-ui";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useLocationHistory } from "@/hooks/use-location-history";
 import { clientCapabilities, DelugeError, getStoredClientKind, rpc, uploadTorrent } from "@/lib/deluge/client";
 import { formatBytes } from "@/lib/deluge/format";
 import {
@@ -85,6 +87,7 @@ import {
   idsBetween,
   resolveRangeAnchor,
 } from "@/lib/deluge/selection";
+import { usedLocationPaths } from "@/lib/location-history";
 import {
   beginNotifyAdd,
   cancelNotifyAdd,
@@ -171,6 +174,7 @@ export function AddTorrentDialog({
   const sessionGen = useRef(0);
   const submittingRef = useRef(false);
   const caps = clientCapabilities(getStoredClientKind());
+  const locationHistory = useLocationHistory(open);
 
   function setSourceMenuOpen(next: boolean) {
     if (sourceMenuOpenProp === undefined) setUncontrolledSourceMenuOpen(next);
@@ -613,6 +617,7 @@ export function AddTorrentDialog({
         toast.success(addSuccessToast(fresh.length));
         onOpenChange(false);
       }
+      locationHistory.remember(fresh.flatMap((item) => usedLocationPaths(item.options)));
       onAdded?.();
     } catch (err) {
       if (wantsNotify) {
@@ -626,6 +631,12 @@ export function AddTorrentDialog({
           for (const id of succeededIds) next.delete(id);
           return next;
         });
+        // Only the torrents that made it in count as a use of their folder.
+        locationHistory.remember(
+          fresh
+            .filter((item) => succeededIds.has(item.id))
+            .flatMap((item) => usedLocationPaths(item.options))
+        );
         onAdded?.();
       }
       const message = addPartialFailureMessage(
@@ -741,6 +752,8 @@ export function AddTorrentDialog({
             <PropertiesPane
               items={selectedItems}
               locationInputRef={locationInputRef}
+              locations={locationHistory.locations}
+              onForgetLocation={locationHistory.forget}
               advancedOpen={advancedOpen}
               onAdvancedOpen={setAdvancedOpen}
               caps={caps}
@@ -1145,6 +1158,8 @@ function AdvancedSwitch({
 function PropertiesPane({
   items,
   locationInputRef,
+  locations,
+  onForgetLocation,
   advancedOpen,
   onAdvancedOpen,
   caps,
@@ -1158,6 +1173,9 @@ function PropertiesPane({
 }: {
   items: PendingAdd[];
   locationInputRef: RefObject<HTMLInputElement | null>;
+  /** Folders used before on this daemon, offered beside each path field. */
+  locations: readonly string[];
+  onForgetLocation: (path: string) => void;
   advancedOpen: boolean;
   onAdvancedOpen: (open: boolean) => void;
   caps: ReturnType<typeof clientCapabilities>;
@@ -1200,12 +1218,14 @@ function PropertiesPane({
       <div className="grid min-w-0 gap-2">
         <div className="grid gap-1">
           <Label htmlFor="add-download-location">Download location</Label>
-          <Input
-            ref={locationInputRef}
+          <LocationInput
+            inputRef={locationInputRef}
             id="add-download-location"
             value={location.mixed ? "" : location.value}
             placeholder={location.mixed ? "Multiple values" : undefined}
-            onChange={(event) => onOptions({ download_location: event.target.value })}
+            onValueChange={(value) => onOptions({ download_location: value })}
+            locations={locations}
+            onForget={onForgetLocation}
           />
         </div>
         <div className="grid gap-1">
@@ -1286,13 +1306,15 @@ function PropertiesPane({
                 checked={moveCompleted.value}
                 onCheckedChange={(checked) => onOptions({ move_completed: checked })}
               />
-              <Input
+              <LocationInput
                 id="add-move-completed"
                 aria-label="Move completed path"
                 placeholder={movePath.mixed ? "Multiple values" : "Move completed path"}
                 value={movePath.mixed ? "" : movePath.value}
                 disabled={moveCompleted.mixed || !moveCompleted.value}
-                onChange={(event) => onOptions({ move_completed_path: event.target.value })}
+                onValueChange={(value) => onOptions({ move_completed_path: value })}
+                locations={locations}
+                onForget={onForgetLocation}
               />
             </div>
           ) : null}

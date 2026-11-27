@@ -202,7 +202,12 @@ assert.match(addDialog, /locationInputRef\.current/);
 assert.match(addDialog, /input\.focus\(\)/);
 assert.match(addDialog, /input\.select\(\)/);
 assert.match(addDialog, /requestAnimationFrame/);
-assert.match(properties, /ref=\{locationInputRef\}/);
+// The download location is a LocationInput (text field plus recent folders); it hands the ref to its input.
+assert.match(properties, /<LocationInput\s+inputRef=\{locationInputRef\}/);
+assert.match(
+  readFileSync(join(dir, "location-input.tsx"), "utf8"),
+  /const fieldRef = inputRef \?\? ownRef;[\s\S]*<Input\s+ref=\{fieldRef\}/
+);
 assert.match(queuePane, /ref=\{addSourceRef\}/);
 assert.doesNotMatch(queuePane, /autoFocus/);
 
