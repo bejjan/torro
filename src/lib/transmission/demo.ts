@@ -7,7 +7,7 @@ import {
 } from "../demo/admin-catalog";
 import { parseMagnetName, trackerHost } from "@/lib/deluge/format";
 import { inventDemoFilesTree, parseMagnetInfoHash, type TorrentInfoDir } from "@/lib/deluge/files-tree";
-import { resolveTransmissionIds, torrentKey } from "./map";
+import { TR_PRIORITY, resolveTransmissionIds, torrentKey } from "./map";
 import {
   TR_STATUS,
   type TransmissionRpcRequest,
@@ -175,7 +175,7 @@ function makeTorrent(opts: {
     hashString: opts.hash ?? fakeHash(opts.name),
     labels: opts.labels ?? [],
     files,
-    fileStats: files.map((f) => ({ bytesCompleted: f.bytesCompleted, wanted: true, priority: 1 })),
+    fileStats: files.map((f) => ({ bytesCompleted: f.bytesCompleted, wanted: true, priority: TR_PRIORITY.NORMAL })),
     trackers: [
       { announce: opts.tracker, id: 0, tier: 0 },
       { announce: "udp://tracker.opentrackr.org:1337/announce", id: 1, tier: 1 },
@@ -492,10 +492,28 @@ function applyTorrentSet(torrent: TransmissionTorrent, args: Record<string, unkn
   };
   mark(args["files-wanted"], { wanted: true });
   mark(args["files-unwanted"], { wanted: false });
-  mark(args["priority-low"], { priority: 0 });
-  mark(args["priority-normal"], { priority: 1 });
-  mark(args["priority-high"], { priority: 2 });
+  mark(args["priority-low"], { priority: TR_PRIORITY.LOW });
+  mark(args["priority-normal"], { priority: TR_PRIORITY.NORMAL });
+  mark(args["priority-high"], { priority: TR_PRIORITY.HIGH });
   torrent.fileStats = stats;
+  if (Array.isArray(args.trackerRemove)) {
+    const ids = new Set(args.trackerRemove.map(Number));
+    const keep = (torrent.trackers ?? []).filter((t) => !ids.has(Number(t.id)));
+    const kept = new Set(keep.map((t) => t.announce));
+    torrent.trackers = keep;
+    torrent.trackerStats = (torrent.trackerStats ?? []).filter((t) => kept.has(String(t.announce)));
+  }
+  if (Array.isArray(args.trackerAdd)) {
+    const trackers = torrent.trackers ?? [];
+    let nextId = trackers.reduce((max, t) => Math.max(max, Number(t.id ?? -1)), -1) + 1;
+    const nextTier = trackers.reduce((max, t) => Math.max(max, Number(t.tier ?? -1)), -1) + 1;
+    for (const raw of args.trackerAdd) {
+      const announce = String(raw).trim();
+      if (!announce || trackers.some((t) => t.announce === announce)) continue;
+      trackers.push({ announce, id: nextId++, tier: nextTier });
+    }
+    torrent.trackers = trackers;
+  }
 }
 
 export function transmissionDemoCookie(header: string | null): string | undefined {

@@ -31,6 +31,7 @@ import {
   sessionToCoreConfig,
   torrentKey,
   torrentOptionsToTransmission,
+  trackerEditToTransmissionArgs,
   uniqueLabels,
 } from "./map";
 import { TORRENT_GET_FIELDS, type TransmissionRpcResponse, type TransmissionSession, type TransmissionTorrent } from "./types";
@@ -344,15 +345,13 @@ export async function handleTransmissionCompat(
         const torrent = torrentById(torrents, Array.isArray(params[0]) ? params[0][0] : params[0]);
         if (!torrent) throw new Error("Unknown torrent");
         const next = (params[1] as { url: string }[]) || [];
-        const current = new Set((torrent.trackers ?? []).map((t) => t.announce));
-        const wanted = new Set(next.map((t) => t.url));
-        unwrap(
-          await call( "torrent-set", {
-            ids: [torrent.id],
-            trackerAdd: next.map((t) => t.url).filter((url) => !current.has(url)),
-            trackerRemove: [...current].filter((url) => !wanted.has(url)),
-          })
+        const edit = trackerEditToTransmissionArgs(
+          torrent.trackers ?? [],
+          next.map((t) => String(t.url ?? ""))
         );
+        if (Object.keys(edit).length) {
+          unwrap(await call("torrent-set", { ids: [torrent.id], ...edit }));
+        }
         return { id, result: true, error: null };
       }
       case "core.add_torrent_magnet": {

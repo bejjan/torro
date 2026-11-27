@@ -13,7 +13,7 @@ import type {
   TorrentTracker,
   UiUpdate,
 } from "@/lib/deluge/types";
-import { TR_STATUS, type TransmissionSession, type TransmissionTorrent } from "./types";
+import { TR_STATUS, type TransmissionSession, type TransmissionTorrent, type TransmissionTracker } from "./types";
 
 export const TRANSMISSION_STATE_FILTERS = [
   "All",
@@ -26,10 +26,13 @@ export const TRANSMISSION_STATE_FILTERS = [
   "Active",
 ] as const;
 
+/** Transmission file priorities (`fileStats[].priority`): TR_PRI_LOW, TR_PRI_NORMAL, TR_PRI_HIGH. */
+export const TR_PRIORITY = { LOW: -1, NORMAL: 0, HIGH: 1 } as const;
+
 export function delugePriorityFromTransmission(priority: number, wanted: boolean): number {
   if (!wanted) return 0;
-  if (priority <= 0) return 1;
-  if (priority >= 2) return 7;
+  if (priority < TR_PRIORITY.NORMAL) return 1;
+  if (priority > TR_PRIORITY.NORMAL) return 7;
   return DEFAULT_FILE_PRIORITY;
 }
 
@@ -37,10 +40,10 @@ export function transmissionPriorityFromDeluge(priority: number): {
   wanted: boolean;
   priority: number;
 } {
-  if (!Number.isFinite(priority) || priority <= 0) return { wanted: false, priority: 0 };
-  if (priority >= 5) return { wanted: true, priority: 2 };
-  if (priority >= 4) return { wanted: true, priority: 1 };
-  return { wanted: true, priority: 0 };
+  if (!Number.isFinite(priority) || priority <= 0) return { wanted: false, priority: TR_PRIORITY.NORMAL };
+  if (priority >= 5) return { wanted: true, priority: TR_PRIORITY.HIGH };
+  if (priority >= 4) return { wanted: true, priority: TR_PRIORITY.NORMAL };
+  return { wanted: true, priority: TR_PRIORITY.LOW };
 }
 
 export function torrentKey(torrent: TransmissionTorrent): string {
@@ -191,7 +194,7 @@ export function filesTreeFromTransmission(torrent: TransmissionTorrent): FileDir
       index,
       size,
       progress: size > 0 ? completed / size : 0,
-      priority: delugePriorityFromTransmission(stat?.priority ?? 1, wanted),
+      priority: delugePriorityFromTransmission(stat?.priority ?? TR_PRIORITY.NORMAL, wanted),
       offset: 0,
     };
     const parts = String(file.name || `file-${index}`).split(/[/\\]/).filter(Boolean);
@@ -462,6 +465,32 @@ export function coreConfigToSession(patch: Record<string, unknown>): Record<stri
   return out;
 }
 
+/**
+ * `torrent-set` args that turn the torrent's tracker list into `wanted`.
+ * `trackerRemove` takes tracker ids, not URLs, and libtransmission rejects an empty or no-op
+ * `trackerAdd`/`trackerRemove`, so each key is only sent when it has work to do.
+ */
+export function trackerEditToTransmissionArgs(
+  current: readonly TransmissionTracker[],
+  wanted: readonly string[]
+): Record<string, unknown> {
+  const wantedSet = new Set(wanted.map((url) => url.trim()).filter(Boolean));
+  const currentUrls = new Set(current.map((t) => t.announce));
+  const trackerAdd = [...wantedSet].filter((url) => !currentUrls.has(url));
+  const trackerRemove: number[] = [];
+  for (const tracker of current) {
+    if (wantedSet.has(tracker.announce)) continue;
+    if (typeof tracker.id !== "number") {
+      throw new Error(`Transmission did not report an id for tracker ${tracker.announce}`);
+    }
+    trackerRemove.push(tracker.id);
+  }
+  const args: Record<string, unknown> = {};
+  if (trackerAdd.length) args.trackerAdd = trackerAdd;
+  if (trackerRemove.length) args.trackerRemove = trackerRemove;
+  return args;
+}
+
 export function filePrioritiesToTransmissionArgs(priorities: number[]): Record<string, unknown> {
   const wanted: number[] = [];
   const unwanted: number[] = [];
@@ -475,8 +504,8 @@ export function filePrioritiesToTransmissionArgs(priorities: number[]): Record<s
       return;
     }
     wanted.push(index);
-    if (mapped.priority >= 2) high.push(index);
-    else if (mapped.priority <= 0) low.push(index);
+    if (mapped.priority === TR_PRIORITY.HIGH) high.push(index);
+    else if (mapped.priority === TR_PRIORITY.LOW) low.push(index);
     else normal.push(index);
   });
   const args: Record<string, unknown> = {};
