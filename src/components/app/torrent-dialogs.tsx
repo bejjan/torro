@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { LocationInput } from "@/components/app/location-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -12,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useLocationHistory } from "@/hooks/use-location-history";
 import { rpc } from "@/lib/deluge/client";
 import { rememberRemovedTorrentIds } from "@/lib/notify-complete";
 
@@ -101,6 +102,7 @@ export function MoveTorrentDialog({
   currentPath: string;
 }) {
   const [path, setPath] = useState(currentPath);
+  const locationHistory = useLocationHistory(open);
 
   useEffect(() => {
     if (open) setPath(currentPath);
@@ -109,6 +111,7 @@ export function MoveTorrentDialog({
   async function submit() {
     try {
       await rpc("core.move_storage", [ids, path]);
+      locationHistory.remember([path]);
       toast.success("Moving storage");
       onOpenChange(false);
     } catch (err) {
@@ -124,8 +127,14 @@ export function MoveTorrentDialog({
           <DialogDescription>New download location for the selected torrents.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-1.5">
-          <Label>Path</Label>
-          <Input value={path} onChange={(e) => setPath(e.target.value)} />
+          <Label htmlFor="move-storage-path">Path</Label>
+          <LocationInput
+            id="move-storage-path"
+            value={path}
+            onValueChange={setPath}
+            locations={locationHistory.locations}
+            onForget={locationHistory.forget}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -33,6 +33,7 @@ import {
 import { HighlightText } from "@/components/app/highlight-text";
 import { DragResizeHandle } from "@/components/app/drag-resize-handle";
 import { StateBadge, stateBarClass } from "@/components/app/state-badge";
+import { TorrentHoverCard } from "@/components/app/torrent-hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -50,6 +51,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useCanHover } from "@/hooks/use-can-hover";
 import {
   formatBytes,
   formatCompactDate,
@@ -97,6 +99,7 @@ import {
   torrentLimitMenuCaps,
   torrentLimitRadioValue,
 } from "@/lib/deluge/torrent-limit-menu";
+import { TORRENT_HOVER_CELL_ATTRIBUTE } from "@/lib/deluge/torrent-hover-card";
 import { torrentIsPaused } from "@/lib/deluge/torrent-pause-resume";
 import { SELECT_COLUMN_ID } from "@/lib/deluge/ui-layout";
 import { cn } from "@/lib/utils";
@@ -254,6 +257,9 @@ export const TorrentTable = memo(function TorrentTable({
   const torrentById = useMemo(() => new Map(torrents), [torrents]);
   const headerSelect = visibleSelectionState(ids, selected);
   const colCount = shownColumns.length + 1;
+  // Hovering needs a mouse: no card on touch devices or in the narrow mobile layout.
+  const canHover = useCanHover();
+  const hoverCard = canHover && !mobile;
 
   const handlersRef = useRef<RowHandlers>(null!);
   handlersRef.current = {
@@ -552,6 +558,7 @@ export const TorrentTable = memo(function TorrentTable({
   const dragFromIndex = dragId ? shownColumns.findIndex((column) => column.id === dragId) : -1;
 
   return (
+    <>
     <div
       ref={scrollRef}
       // The shell lets this scroller run underneath the translucent filter sidebar and sets
@@ -659,6 +666,7 @@ export const TorrentTable = memo(function TorrentTable({
                 query={search}
                 labels={labels}
                 clientKind={clientKind}
+                hoverCard={hoverCard}
                 handlersRef={handlersRef}
                 height={virtualRow.size}
               />
@@ -672,6 +680,16 @@ export const TorrentTable = memo(function TorrentTable({
         </tbody>
       </table>
     </div>
+    {/* A sibling of the list, not a child: keys and clicks inside the card must not bubble into list handlers. */}
+    {hoverCard ? (
+      <TorrentHoverCard
+        scrollRef={scrollRef}
+        torrentById={torrentById}
+        clientKind={clientKind}
+        handlersRef={handlersRef}
+      />
+    ) : null}
+    </>
   );
 });
 
@@ -796,6 +814,7 @@ const TorrentRow = memo(function TorrentRow({
   query,
   labels,
   clientKind,
+  hoverCard,
   handlersRef,
   height,
 }: {
@@ -811,6 +830,8 @@ const TorrentRow = memo(function TorrentRow({
   query: string;
   labels: string[];
   clientKind: ClientKind;
+  /** The name cell opens the shared hover card, which replaces its overflow tooltip. */
+  hoverCard: boolean;
   handlersRef: { current: RowHandlers };
   height: number;
 }) {
@@ -828,6 +849,7 @@ const TorrentRow = memo(function TorrentRow({
       <ContextMenuTrigger
         render={
           <tr
+            data-torrent-id={id}
             className={torrentRowClassName({
               striped,
               selected,
@@ -858,6 +880,7 @@ const TorrentRow = memo(function TorrentRow({
             torrent={torrent}
             query={query}
             last={index === shownColumns.length - 1}
+            hoverCard={hoverCard && column.id === "name"}
           />
         ))}
         <td
@@ -1317,11 +1340,14 @@ const TorrentColumnCell = memo(function TorrentColumnCell({
   torrent: t,
   query,
   last,
+  hoverCard = false,
 }: {
   column: TorrentColumn;
   torrent: TorrentStatus;
   query: string;
   last?: boolean;
+  /** This cell is the hover card's target (name column, mouse pointers only). */
+  hoverCard?: boolean;
 }) {
   const text = torrentColumnCellText(column, t);
   const hit = (value: string) => <HighlightText text={value} query={query} />;
@@ -1408,11 +1434,18 @@ const TorrentColumnCell = memo(function TorrentColumnCell({
     }
   })();
   if (!cell) return null;
-  const typed = cell as ReactElement<{ className?: string; children?: React.ReactNode }>;
+  const typed = cell as ReactElement<{
+    className?: string;
+    children?: React.ReactNode;
+    [TORRENT_HOVER_CELL_ATTRIBUTE]?: string;
+  }>;
   const isProgress = column.id === "progress";
   // Error badges already ship a Tooltip; nesting another trigger fights Base UI hover.
-  const tooltipText = column.id === "status" && t.state === "Error" ? "" : isProgress ? "" : text;
+  // The hover card shows the full name, so its cell needs no overflow tooltip either.
+  const tooltipText =
+    hoverCard || (column.id === "status" && t.state === "Error") || isProgress ? "" : text;
   return cloneElement(typed, {
+    [TORRENT_HOVER_CELL_ATTRIBUTE]: hoverCard ? "" : undefined,
     className: cn(
       typed.props.className,
       // table-layout:fixed still lets min-content wrap; max-w-0 + nowrap/ellipsis clips to the col width.

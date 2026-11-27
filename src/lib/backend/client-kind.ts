@@ -105,6 +105,11 @@ export function clientCapabilities(kind: ClientKind) {
     dhtNodes: deluge || qbittorrent,
     libtorrentVersion: deluge || qbittorrent,
     hostsPhase: deluge,
+    // Every adapter implements core.queue_* and core.force_recheck today.
+    // Quick-action surfaces (the row hover card) gate on these, so a client
+    // without them only has to say so here.
+    queueOrdering: true,
+    forceRecheck: true,
   };
 }
 

@@ -2,10 +2,12 @@
 
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { LocationInput } from "@/components/app/location-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useLocationHistory } from "@/hooks/use-location-history";
 import { clientCapabilities, getStoredClientKind, rpc } from "@/lib/deluge/client";
 import { buildTorrentOptionsPayload, optionLimitInput } from "@/lib/deluge/torrent-options";
 import type { TorrentStatus } from "@/lib/deluge/types";
@@ -28,6 +30,7 @@ export function OptionsForm({ torrentId, torrent }: { torrentId: string; torrent
   const [movePath, setMovePath] = useState(torrent.move_completed_path ?? "");
   const [superSeed, setSuperSeed] = useState(Boolean(torrent.super_seeding));
   const [firstLast, setFirstLast] = useState(Boolean(torrent.prioritize_first_last));
+  const locationHistory = useLocationHistory();
 
   async function save() {
     try {
@@ -48,6 +51,7 @@ export function OptionsForm({ torrentId, torrent }: { torrentId: string; torrent
           prioritizeFirstLast: firstLast,
         }),
       ]);
+      if (deluge && move) locationHistory.remember([movePath]);
       toast.success("Options saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
@@ -139,12 +143,14 @@ export function OptionsForm({ torrentId, torrent }: { torrentId: string; torrent
           <Label htmlFor={`${uid}-move-path`} className="text-xs font-normal text-muted-foreground">
             Completed path
           </Label>
-          <Input
+          <LocationInput
             id={`${uid}-move-path`}
             value={movePath}
             disabled={!move}
-            onChange={(e) => setMovePath(e.target.value)}
-            className="h-7 min-w-0 w-full font-mono text-xs"
+            onValueChange={setMovePath}
+            locations={locationHistory.locations}
+            onForget={locationHistory.forget}
+            inputClassName="h-7 min-w-0 w-full font-mono text-xs"
           />
         </div>
       </OptionSection>

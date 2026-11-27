@@ -89,6 +89,7 @@ import {
   visibleTorrentColumns,
   type TorrentColumnId,
 } from "@/lib/deluge/torrent-columns";
+import { hasOpenTorrentHoverCard } from "@/lib/deluge/torrent-hover-card";
 import {
   filterAndSortTorrents,
   type TorrentSortKey,
@@ -674,7 +675,8 @@ export function TorrentShell({
       const action = decideEscapeSelectionAction({
         key: event.key,
         defaultPrevented: event.defaultPrevented,
-        overlayOpen,
+        // An open row hover card takes Escape first, but leaves the shortcuts above alone.
+        overlayOpen: overlayOpen || hasOpenTorrentHoverCard(document),
         targetKind,
         search: searchValueRef.current,
         selectedCount: selectedRef.current.size,
