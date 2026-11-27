@@ -1,18 +1,7 @@
 "use client";
 
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronsDown,
-  ChevronsUp,
-  Pause,
-  Play,
-  RefreshCw,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { Pause, Play, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { StateBadge } from "@/components/app/state-badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle } from "@/components/ui/popover";
 import type { ClientKind } from "@/lib/deluge/client";
@@ -42,13 +31,6 @@ type HoverCardHandlers = {
   remove: (torrentIds: string[]) => void;
 };
 
-const QUEUE_ICONS: Record<string, LucideIcon> = {
-  queue_top: ChevronsUp,
-  queue_up: ArrowUp,
-  queue_down: ArrowDown,
-  queue_bottom: ChevronsDown,
-};
-
 /**
  * One card for the whole list, not one per row. Rows only carry data
  * attributes; hover is tracked with delegated listeners on the scroll
@@ -57,6 +39,9 @@ const QUEUE_ICONS: Record<string, LucideIcon> = {
  *
  * The surface is a Popover (a labelled dialog), because a tooltip cannot hold
  * buttons. Mouse only: touch and pen pointers never start the open timer.
+ *
+ * Kept deliberately small: the name, one muted status line and icon-only
+ * buttons. Queue ordering stays in the row context menu.
  */
 export function TorrentHoverCard({
   scrollRef,
@@ -247,7 +232,7 @@ export function TorrentHoverCard({
           state.leaveFocus = false;
           return false;
         }}
-        className="w-80 max-w-[calc(100vw-1rem)]"
+        className="w-64 max-w-[calc(100vw-1rem)] cursor-default gap-1.5 p-3"
         onPointerEnter={() => {
           cancelOpen();
           cancelClose();
@@ -256,38 +241,49 @@ export function TorrentHoverCard({
       >
         {torrent ? (
           <>
-            <PopoverHeader className="min-w-0 gap-1.5">
-              <PopoverTitle className="max-h-24 overflow-y-auto leading-snug break-words select-text">
+            <PopoverHeader className="min-w-0 gap-0.5">
+              <PopoverTitle className="line-clamp-4 leading-snug font-semibold break-words select-text">
                 {torrent.name}
               </PopoverTitle>
-              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <StateBadge state={torrent.state} message={torrent.message} />
-                <span className="tabular">{formatProgress(torrent.progress)}</span>
-                <span className="tabular">{formatBytes(torrent.total_wanted)}</span>
-              </div>
+              <p className="tabular truncate text-xs text-muted-foreground">
+                {torrent.state} · {formatProgress(torrent.progress)} ·{" "}
+                {formatBytes(torrent.total_wanted)}
+              </p>
             </PopoverHeader>
-            <div role="group" aria-label="Torrent actions" className="flex flex-wrap items-center gap-1.5">
-              <Button type="button" variant="outline" size="sm" onClick={() => run(actions.toggle)}>
+            <div
+              role="group"
+              aria-label="Torrent actions"
+              className="-mx-1.5 -mb-1 flex items-center gap-1 text-muted-foreground"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={actions.toggle.label}
+                title={actions.toggle.label}
+                onClick={() => run(actions.toggle)}
+              >
                 {actions.toggle.id === "resume" ? <Play /> : <Pause />}
-                {actions.toggle.label}
               </Button>
               {actions.recheck ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={actions.recheck.label}
                   title="Force recheck"
                   onClick={() => run(actions.recheck!)}
                 >
                   <RefreshCw />
-                  {actions.recheck.label}
                 </Button>
               ) : null}
               <Button
                 type="button"
-                variant="destructive"
-                size="sm"
-                className="ml-auto"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remove…"
+                title="Remove…"
+                className="hover:text-destructive"
                 onClick={() => {
                   // Never removes directly: the shell opens RemoveTorrentDialog to confirm.
                   intent.current.leaveFocus = true;
@@ -296,32 +292,8 @@ export function TorrentHoverCard({
                 }}
               >
                 <Trash2 />
-                Remove…
               </Button>
             </div>
-            {actions.queue.length > 0 ? (
-              <div role="group" aria-label="Queue" className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Queue</span>
-                <div className="flex items-center rounded-lg border border-border">
-                  {actions.queue.map((action) => {
-                    const Icon = QUEUE_ICONS[action.id] ?? ArrowUp;
-                    return (
-                      <Button
-                        key={action.id}
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={action.label}
-                        title={action.label}
-                        onClick={() => run(action)}
-                      >
-                        <Icon />
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
       </PopoverContent>

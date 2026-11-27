@@ -136,7 +136,12 @@ assert.equal(
   assert.doesNotMatch(card, /rpc\(|core\.remove_torrent/);
   assert.match(card, /torrentHoverCardActions\(clientKind, torrent\?\.state\)/);
   assert.match(card, /actions\.recheck \?/);
-  assert.match(card, /actions\.queue\.length > 0 \?/);
+  // Compact card: icon-only buttons with accessible names, and no queue controls.
+  assert.doesNotMatch(card, /actions\.queue/);
+  assert.doesNotMatch(card, /\{actions\.(toggle|recheck)\.label\}\s*<\/Button>/);
+  assert.match(card, /aria-label=\{actions\.toggle\.label\}/);
+  assert.match(card, /aria-label="Remove…"/);
+  assert.match(card, /cursor-default/);
   assert.match(shell, /onRemove=\{openRemove\}/);
   assert.match(shell, /<RemoveTorrentDialog/);
 
