@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Info,
   LogOut,
@@ -99,6 +99,7 @@ import { pruneActiveId, pruneSelectedIds } from "@/lib/deluge/selection";
 import {
   SELECT_COLUMN_ID,
   SIDEBAR_DEFAULT_WIDTH,
+  TORRENT_LIST_INSET_VAR,
   DETAILS_DEFAULT_DOCK,
   DETAILS_DEFAULT_HEIGHT,
   DETAILS_DEFAULT_WIDTH,
@@ -695,6 +696,9 @@ export function TorrentShell({
   const downloadPath =
     primaryTorrent?.download_location || "/home/deluge/Downloads";
 
+  /** Width the desktop sidebar covers; the list runs underneath it by this much. */
+  const sidebarInset = !mobile && showSidebar ? sidebarWidth : 0;
+
   const table = (
     <TorrentTable
       torrents={torrents}
@@ -862,12 +866,13 @@ export function TorrentShell({
       ) : null}
 
       <div ref={splitRef} className="flex min-h-0 flex-1">
-        {!mobile && showSidebar ? (
+        {sidebarInset > 0 ? (
+          // z-10 keeps the translucent sidebar above the list, which extends underneath it.
           <div
-            className="relative min-h-0 min-w-0 shrink-0 self-stretch"
+            className="relative z-10 min-h-0 min-w-0 shrink-0 self-stretch"
             style={{ width: sidebarWidth }}
           >
-            <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
+            <aside className="sidebar-glass flex h-full min-h-0 min-w-0 flex-col overflow-hidden text-sidebar-foreground">
               <FilterSidebar
                 filters={sidebarFilterTree}
                 selected={filters}
@@ -898,7 +903,23 @@ export function TorrentShell({
             !mobile && detailsDock === "right" && primary ? "flex-row" : "flex-col"
           )}
         >
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{table}</div>
+          {/*
+            The list bleeds left under the sidebar by the sidebar's width, and TorrentTable pads its
+            scroll content by the same amount (--torrent-list-inset), so nothing is covered until
+            the list is scrolled sideways. `isolate` keeps the sticky header and column resize
+            handles from stacking above the sidebar.
+          */}
+          <div
+            className="isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+            style={
+              {
+                marginLeft: -sidebarInset,
+                [TORRENT_LIST_INSET_VAR]: `${sidebarInset}px`,
+              } as CSSProperties
+            }
+          >
+            {table}
+          </div>
           {!mobile && primary ? (
             <div
               className={cn(

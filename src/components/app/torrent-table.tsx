@@ -537,7 +537,7 @@ export const TorrentTable = memo(function TorrentTable({
   if (torrents.length === 0) {
     const query = search.trim();
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 pl-[calc(var(--torrent-list-inset,0px)_+_2rem)] text-center">
         <Inbox className="size-12 text-muted-foreground" aria-hidden />
         <p className="text-sm font-medium" title={query ? torrentSearchEmptyTitle(search, false) : undefined}>
           {query ? torrentSearchEmptyTitle(search) : TORRENT_FILTER_EMPTY_TITLE}
@@ -554,7 +554,10 @@ export const TorrentTable = memo(function TorrentTable({
   return (
     <div
       ref={scrollRef}
-      className="min-h-0 flex-1 overflow-auto outline-none focus:outline-none"
+      // The shell lets this scroller run underneath the translucent filter sidebar and sets
+      // --torrent-list-inset to the sidebar width: the padding scrolls with the content, so no
+      // column is covered at scrollLeft 0 and rows pass behind the sidebar when scrolled sideways.
+      className="min-h-0 flex-1 overflow-auto pl-[var(--torrent-list-inset,0px)] scroll-pl-[var(--torrent-list-inset,0px)] outline-none focus:outline-none"
       tabIndex={0}
       aria-label="Torrent list"
       onKeyDown={onKeyDown}
@@ -682,7 +685,11 @@ function TorrentListSkeleton({
   widthFor: (id: string) => number;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto" aria-busy="true" aria-label="Torrent list">
+    <div
+      className="min-h-0 flex-1 overflow-auto pl-[var(--torrent-list-inset,0px)]"
+      aria-busy="true"
+      aria-label="Torrent list"
+    >
       <span className="sr-only">Loading torrents</span>
       <table
         className="table-fixed border-separate border-spacing-0 text-sm"

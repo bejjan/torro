@@ -22,6 +22,11 @@ export const SIDEBAR_MIN_WIDTH = 160;
 export const SIDEBAR_MAX_WIDTH = 480;
 /** Leave at least this much room for the torrent table when resizing the sidebar. */
 export const MAIN_MIN_WIDTH = 360;
+/**
+ * CSS custom property the shell sets to the desktop sidebar's width (0px when it is hidden).
+ * The torrent list scrolls underneath the translucent sidebar and pads its content by this.
+ */
+export const TORRENT_LIST_INSET_VAR = "--torrent-list-inset";
 
 /** Matches the previous CSS default `min(16rem, 36vh)`. */
 export const DETAILS_DEFAULT_HEIGHT = 256;
