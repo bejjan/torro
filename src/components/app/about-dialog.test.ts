@@ -9,7 +9,7 @@ const brand = readFileSync(join(dir, "brand.tsx"), "utf8");
 assert.match(brand, /min-w-0 truncate font-heading/);
 assert.match(brand, /wordmarkClassName/);
 assert.match(brand, /\/logo\.svg/);
-assert.match(brand, />torro</);
+assert.match(brand, />\s*torro\s*</);
 assert.doesNotMatch(brand, /from "lucide-react"/);
 assert.doesNotMatch(brand, /<button/);
 assert.doesNotMatch(brand, /onClick/);

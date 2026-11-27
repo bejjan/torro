@@ -14,7 +14,6 @@ import {
 
 export function SessionProgressFavicon({ progress }: { progress: number | null }) {
   const progressRef = useRef(progress);
-  progressRef.current = progress;
   const paintRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -77,6 +76,7 @@ export function SessionProgressFavicon({ progress }: { progress: number | null }
   }, []);
 
   useEffect(() => {
+    progressRef.current = progress;
     paintRef.current();
   }, [progress]);
 

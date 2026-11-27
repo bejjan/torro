@@ -101,7 +101,10 @@ export function TorrentDetails({
   const [filesSettled, setFilesSettled] = useState(false);
   const detailTorrentId = useRef<string | null>(torrentId);
   const tabRef = useRef(tab);
-  tabRef.current = tab;
+  // Declared before the effect that calls loadDetails, so it reads the new tab.
+  useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
 
   useEffect(() => {
     const sameTorrent = detailTorrentId.current === torrentId && torrentId != null;

@@ -181,7 +181,15 @@ export function AddTorrentDialog({
     fileInputRef.current?.click();
   }
 
-  if (pickDefaultAddRef) pickDefaultAddRef.current = pickDefaultAdd;
+  // Expose the default add action to the parent. Set after commit: React
+  // forbids writing refs during render.
+  useEffect(() => {
+    if (!pickDefaultAddRef) return;
+    pickDefaultAddRef.current = pickDefaultAdd;
+    return () => {
+      pickDefaultAddRef.current = null;
+    };
+  });
 
   function revealPanel() {
     setSourceMenuOpen(false);
