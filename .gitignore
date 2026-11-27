@@ -26,7 +26,7 @@
 
 # local NAS helper (keep on the machine, not in the repo)
 scripts/nas-rebuild.sh
-# Local Cursor/agent worktrees (nested checkouts; not project source)
+# Local agent worktrees (nested checkouts; not project source)
 .worktrees/
 
 # debug

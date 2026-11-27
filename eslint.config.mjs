@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Nested agent worktrees are full checkouts, not project source.
+    ".worktrees/**",
   ]),
 ]);
 

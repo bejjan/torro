@@ -129,11 +129,13 @@ import {
 } from "@/lib/deluge/session-monitor";
 import {
   DEFAULT_DOCUMENT_TITLE,
+  ZERO_SESSION_RATES,
   holdLastSessionRates,
   isWebSessionSpeedVisible,
   isWebSidebarVisible,
   sessionSpeedDocumentTitle,
   writeDocumentTitleIfChanged,
+  type SessionRates,
 } from "@/lib/deluge/web-config";
 import { cn } from "@/lib/utils";
 
@@ -199,16 +201,23 @@ export function TorrentShell({
   const uiRevision = useRef<number | null>(null);
   const switchingHosts = useRef(false);
   const onLogoutRef = useRef(onLogout);
-  onLogoutRef.current = onLogout;
-  const lastRatesRef = useRef({ download: 0, upload: 0 });
+  const lastRatesRef = useRef<SessionRates>(ZERO_SESSION_RATES);
+  const [sessionRates, setSessionRates] = useState<SessionRates>(ZERO_SESSION_RATES);
   const [rateSamples, setRateSamples] = useState<SessionRateSample[]>([]);
   const [searchFieldTitle, setSearchFieldTitle] = useState<string | undefined>(undefined);
   const [searchPlaceholder, setSearchPlaceholder] = useState(DEFAULT_TORRENT_SEARCH_PLACEHOLDER);
   const [addTorrentLabel, setAddTorrentLabel] = useState(DEFAULT_ADD_TORRENT_LABEL);
-  searchValueRef.current = search;
-  selectedRef.current = selected;
-  activeIdRef.current = activeId;
-  addOpenRef.current = addOpen;
+
+  // Latest-value refs for handlers and async callbacks. Synced after commit:
+  // React forbids writing refs during render. Keep this the first effect so
+  // later effects in this component read current values.
+  useEffect(() => {
+    onLogoutRef.current = onLogout;
+    searchValueRef.current = search;
+    selectedRef.current = selected;
+    activeIdRef.current = activeId;
+    addOpenRef.current = addOpen;
+  });
 
   useEffect(() => {
     const isMac = isMacPlatform(navigator.userAgent);
@@ -324,6 +333,7 @@ export function TorrentShell({
       setUi((prev) => mergeUiUpdate(prev, result));
       const held = holdLastSessionRates(lastRatesRef.current, result.stats);
       lastRatesRef.current = held;
+      setSessionRates(held);
       setRateSamples((prev) => nextRateSamples(prev, held, result.connected));
       setError(null);
       if (!result.connected) setError("Daemon disconnected");
@@ -354,7 +364,8 @@ export function TorrentShell({
     setLoading(true);
     setError(null);
     setRateSamples([]);
-    lastRatesRef.current = { download: 0, upload: 0 };
+    lastRatesRef.current = ZERO_SESSION_RATES;
+    setSessionRates(ZERO_SESSION_RATES);
     resetNotifyCompleteMemory();
   }, []);
 
@@ -508,10 +519,8 @@ export function TorrentShell({
   const primary = activeId && ui?.torrents?.[activeId] ? activeId : selectedIds[0] ?? null;
   const primaryTorrent = primary ? (ui?.torrents?.[primary] as TorrentStatus | undefined) : null;
   const stats = ui?.stats as SessionStats | null;
-  const rates = holdLastSessionRates(lastRatesRef.current, stats);
-  lastRatesRef.current = rates;
-  const downloadRate = rates.download;
-  const uploadRate = rates.upload;
+  const downloadRate = sessionRates.download;
+  const uploadRate = sessionRates.upload;
   const speedTitle = sessionSpeedDocumentTitle(downloadRate, uploadRate, showSessionSpeed);
   const faviconProgress = useMemo(
     () => sessionFaviconDownloadProgress(Object.values(ui?.torrents ?? {})),
